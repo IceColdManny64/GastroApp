@@ -17,20 +17,26 @@ import {
   getRecipe,
 } from '../services/recipes';
 import { RecipeItem } from '../types/RecipeItem';
+import { safeGoBack } from '../utils/navigation';
 import {
   getFavorites,
   getUserSettings,
   toggleFavorite,
+  useThemeMode,
 } from '../utils/preferencesStorage';
 
 export default function DetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [recipe, setRecipe] = useState<RecipeItem | null>(null);
   const router = useRouter();
+  const isDarkTheme = useThemeMode();
+
   const [loading, setLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(isDarkTheme);
   const [imageUri, setImageUri] = useState<string>(DEFAULT_RECIPE_IMAGE);
+
+  const isDark = isDarkTheme || darkMode;
 
   useFocusEffect(
     useCallback(() => {
@@ -73,9 +79,17 @@ export default function DetailScreen() {
   };
 
   const handleEdit = () => {
+    if (!recipe) return;
+    const safeRecipePayload =
+      recipe.image && recipe.image.startsWith('data:')
+        ? { ...recipe, image: '', imageURL: '' }
+        : recipe;
     router.push({
       pathname: '/form',
-      params: { recipe: JSON.stringify(recipe) },
+      params: {
+        id: String(recipe.id),
+        recipe: JSON.stringify(safeRecipePayload),
+      },
     });
   };
 
@@ -83,7 +97,7 @@ export default function DetailScreen() {
     if (!recipe) return;
     try {
       await deleteRecipe(recipe.id);
-      router.back();
+      safeGoBack(router, '/home');
     } catch (err) {
       Alert.alert(
         'Error',
@@ -121,12 +135,12 @@ export default function DetailScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.centered, darkMode && styles.centeredDark]}>
+      <View style={[styles.centered, isDark && styles.centeredDark]}>
         <ActivityIndicator
           size="large"
-          color={darkMode ? '#E74C3C' : '#333333'}
+          color={isDark ? '#E74C3C' : '#333333'}
         />
-        <Text style={[styles.loadingText, darkMode && styles.textDark]}>
+        <Text style={[styles.loadingText, isDark && styles.textDark]}>
           Cargando detalle de la receta...
         </Text>
       </View>
@@ -135,12 +149,12 @@ export default function DetailScreen() {
 
   if (!recipe) {
     return (
-      <View style={[styles.centered, darkMode && styles.centeredDark]}>
-        <Text style={[styles.emptyText, darkMode && styles.textDark]}>
+      <View style={[styles.centered, isDark && styles.centeredDark]}>
+        <Text style={[styles.emptyText, isDark && styles.textDark]}>
           No se encontró la receta
         </Text>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => safeGoBack(router, '/home')}
           style={[styles.button, styles.editButton]}
         >
           <Text style={styles.buttonText}>Volver al catálogo</Text>
@@ -151,19 +165,24 @@ export default function DetailScreen() {
 
   return (
     <ScrollView
-      style={[styles.screen, darkMode && styles.screenDark]}
+      style={[styles.screen, isDark && styles.screenDark]}
       contentContainerStyle={styles.container}
     >
-      <View style={[styles.detailCard, darkMode && styles.detailCardDark]}>
+      <View style={[styles.detailCard, isDark && styles.detailCardDark]}>
         <Image
           source={{ uri: imageUri }}
-          style={styles.heroImage}
+          style={[styles.heroImage, isDark && styles.heroImageDark]}
           onError={() => setImageUri(DEFAULT_RECIPE_IMAGE)}
         />
 
         <View style={styles.bodyContent}>
           <View style={styles.topRow}>
-            <View style={styles.categoryBadge}>
+            <View
+              style={[
+                styles.categoryBadge,
+                isDark && styles.categoryBadgeDark,
+              ]}
+            >
               <Text style={styles.categoryText}>{recipe.category}</Text>
             </View>
 
@@ -171,13 +190,21 @@ export default function DetailScreen() {
               onPress={handleToggleFavorite}
               style={[
                 styles.favoriteButton,
-                isFavorite && styles.favoriteButtonActive,
+                isDark && styles.favoriteButtonDark,
+                isFavorite &&
+                  (isDark
+                    ? styles.favoriteButtonActiveDark
+                    : styles.favoriteButtonActive),
               ]}
             >
               <Text
                 style={[
                   styles.favoriteButtonText,
-                  isFavorite && styles.favoriteButtonTextActive,
+                  isDark && styles.favoriteButtonTextDark,
+                  isFavorite &&
+                    (isDark
+                      ? styles.favoriteButtonTextActiveDark
+                      : styles.favoriteButtonTextActive),
                 ]}
               >
                 {isFavorite ? '♥ En tus favoritos' : '♡ Agregar a favoritos'}
@@ -185,32 +212,62 @@ export default function DetailScreen() {
             </Pressable>
           </View>
 
-          <Text style={[styles.title, darkMode && styles.textDark]}>
+          <Text style={[styles.title, isDark && styles.textDark]}>
             {recipe.title}
           </Text>
 
           <View style={styles.badgesRow}>
-            <View style={styles.metaBadgeTime}>
-              <Text style={styles.metaBadgeTimeText}>
+            <View
+              style={[
+                styles.metaBadgeTime,
+                isDark && styles.metaBadgeTimeDark,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.metaBadgeTimeText,
+                  isDark && styles.metaBadgeTimeTextDark,
+                ]}
+              >
                 ⏱️ Tiempo: {recipe.prepareTime}
               </Text>
             </View>
-            <View style={styles.metaBadgeDifficulty}>
-              <Text style={styles.metaBadgeDifficultyText}>
+            <View
+              style={[
+                styles.metaBadgeDifficulty,
+                isDark && styles.metaBadgeDifficultyDark,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.metaBadgeDifficultyText,
+                  isDark && styles.metaBadgeDifficultyTextDark,
+                ]}
+              >
                 📊 Dificultad: {recipe.difficulty}
               </Text>
             </View>
-            <View style={styles.metaBadgeLikes}>
-              <Text style={styles.metaBadgeLikesText}>
+            <View
+              style={[
+                styles.metaBadgeLikes,
+                isDark && styles.metaBadgeLikesDark,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.metaBadgeLikesText,
+                  isDark && styles.metaBadgeLikesTextDark,
+                ]}
+              >
                 👍 Aprobación: {recipe.likeRate}%
               </Text>
             </View>
           </View>
 
-          <Text style={[styles.sectionHeader, darkMode && styles.textDark]}>
+          <Text style={[styles.sectionHeader, isDark && styles.textDark]}>
             Descripción y preparación
           </Text>
-          <Text style={[styles.description, darkMode && styles.subTextDark]}>
+          <Text style={[styles.description, isDark && styles.subTextDark]}>
             {recipe.description}
           </Text>
 
@@ -305,6 +362,9 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
     backgroundColor: '#E5DDD9',
   },
+  heroImageDark: {
+    backgroundColor: '#181312',
+  },
   bodyContent: {
     padding: 20,
   },
@@ -322,6 +382,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
   },
+  categoryBadgeDark: {
+    backgroundColor: '#E74C3C',
+  },
   categoryText: {
     color: '#FFFFFF',
     fontWeight: '700',
@@ -335,16 +398,30 @@ const styles = StyleSheet.create({
     borderColor: '#C0392B',
     backgroundColor: '#FFFFFF',
   },
+  favoriteButtonDark: {
+    backgroundColor: '#181312',
+    borderColor: '#E74C3C',
+  },
   favoriteButtonActive: {
     backgroundColor: '#FDEDEC',
+  },
+  favoriteButtonActiveDark: {
+    backgroundColor: '#3A1F1E',
+    borderColor: '#E74C3C',
   },
   favoriteButtonText: {
     color: '#C0392B',
     fontWeight: '700',
     fontSize: 13,
   },
+  favoriteButtonTextDark: {
+    color: '#EC7063',
+  },
   favoriteButtonTextActive: {
     color: '#C0392B',
+  },
+  favoriteButtonTextActiveDark: {
+    color: '#EC7063',
   },
   title: {
     fontSize: 24,
@@ -364,10 +441,16 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 10,
   },
+  metaBadgeTimeDark: {
+    backgroundColor: '#33261A',
+  },
   metaBadgeTimeText: {
     color: '#B9770E',
     fontWeight: '700',
     fontSize: 13,
+  },
+  metaBadgeTimeTextDark: {
+    color: '#F5B041',
   },
   metaBadgeDifficulty: {
     backgroundColor: '#F3ECE9',
@@ -375,10 +458,18 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 10,
   },
+  metaBadgeDifficultyDark: {
+    backgroundColor: '#181312',
+    borderWidth: 1,
+    borderColor: '#382E2B',
+  },
   metaBadgeDifficultyText: {
     color: '#4A3833',
     fontWeight: '700',
     fontSize: 13,
+  },
+  metaBadgeDifficultyTextDark: {
+    color: '#F7F2F0',
   },
   metaBadgeLikes: {
     backgroundColor: '#E8F8F0',
@@ -386,10 +477,16 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 10,
   },
+  metaBadgeLikesDark: {
+    backgroundColor: '#1B3124',
+  },
   metaBadgeLikesText: {
     color: '#27AE60',
     fontWeight: '700',
     fontSize: 13,
+  },
+  metaBadgeLikesTextDark: {
+    color: '#58D68D',
   },
   sectionHeader: {
     fontSize: 16,

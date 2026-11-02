@@ -17,10 +17,13 @@ import {
   getFavorites,
   getUserSettings,
   toggleFavorite,
+  useThemeMode,
 } from '../utils/preferencesStorage';
 
 export default function FavoritesScreen() {
   const router = useRouter();
+  const isDarkTheme = useThemeMode();
+
   const [recipes, setRecipes] = useState<RecipeItem[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
@@ -64,7 +67,7 @@ export default function FavoritesScreen() {
     return recipes.filter((item) => favoriteIds.includes(item.id));
   }, [recipes, favoriteIds]);
 
-  const isDark = settings.themeMode === 'dark';
+  const isDark = isDarkTheme || settings.themeMode === 'dark';
 
   if (loading) {
     return (
@@ -83,7 +86,9 @@ export default function FavoritesScreen() {
   if (error) {
     return (
       <View style={[styles.centered, isDark && styles.centeredDark]}>
-        <Text style={styles.errorText}>{error}</Text>
+        <Text style={[styles.errorText, isDark && styles.errorTextDark]}>
+          {error}
+        </Text>
         <Pressable onPress={loadFavoritesData} style={styles.primaryButton}>
           <Text style={styles.primaryButtonText}>Reintentar</Text>
         </Pressable>
@@ -194,6 +199,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
     fontWeight: '600',
+  },
+  errorTextDark: {
+    color: '#EC7063',
   },
   headerBox: {
     marginBottom: 16,

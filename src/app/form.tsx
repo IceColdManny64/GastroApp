@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,23 +14,41 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { createRecipe, updateRecipe } from '../services/recipes';
+import { createRecipe, getRecipe, updateRecipe } from '../services/recipes';
 import {
   RecipeFormPayload,
   RecipeItem,
   VALID_RECIPE_CATEGORIES,
   VALID_RECIPE_DIFFICULTIES,
 } from '../types/RecipeItem';
+import { safeGoBack } from '../utils/navigation';
+import { useThemeMode } from '../utils/preferencesStorage';
 import { validateRecipeForm } from '../utils/validators';
 
 export default function FormScreen() {
-  const { recipe } = useLocalSearchParams<{ recipe?: string }>();
-  const editing: RecipeItem | null = recipe ? JSON.parse(recipe) : null;
+  const { recipe, id } = useLocalSearchParams<{
+    recipe?: string;
+    id?: string;
+  }>();
   const router = useRouter();
+  const isDark = useThemeMode();
+
+  const editing: RecipeItem | null = useMemo(() => {
+    if (!recipe) return null;
+    try {
+      return JSON.parse(recipe) as RecipeItem;
+    } catch {
+      return null;
+    }
+  }, [recipe]);
+
+  const editingId = editing?.id ?? (id ? Number(id) : null);
 
   const [title, setTitle] = useState(editing?.title ?? '');
   const [description, setDescription] = useState(editing?.description ?? '');
-  const [imageUri, setImageUri] = useState<string | null>(editing?.image ?? null);
+  const [imageUri, setImageUri] = useState<string | null>(
+    editing?.image ?? null
+  );
   const [prepareTime, setPrepareTime] = useState(
     editing?.prepareTime ?? '00:30:00'
   );
@@ -41,6 +59,32 @@ export default function FormScreen() {
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
+
+  useEffect(() => {
+    if (!editingId) return;
+    let isMounted = true;
+
+    (async () => {
+      try {
+        const fresh = await getRecipe(Number(editingId));
+        if (isMounted && fresh) {
+          setTitle(fresh.title);
+          setDescription(fresh.description);
+          setImageUri(fresh.image);
+          setPrepareTime(fresh.prepareTime);
+          setLikeRate(String(fresh.likeRate));
+          setCategory(fresh.category);
+          setDifficulty(fresh.difficulty);
+        }
+      } catch (err) {
+        console.warn('[form.tsx] Usando datos iniciales de edición:', err);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [editingId]);
 
   const pickImage = async () => {
     if (Platform.OS !== 'web') {
@@ -54,7 +98,7 @@ export default function FormScreen() {
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.8,
+      quality: 0.7,
     });
 
     if (!result.canceled && result.assets[0]) {
@@ -66,6 +110,8 @@ export default function FormScreen() {
       });
     }
   };
+
+  const fallbackDestination = editingId ? `/details?id=${editingId}` : '/home';
 
   const handleSave = async () => {
     const validation = validateRecipeForm({
@@ -133,13 +179,13 @@ export default function FormScreen() {
         } as any);
       }
 
-      if (editing) {
-        await updateRecipe(editing.id, formData, payload);
+      if (editingId) {
+        await updateRecipe(editingId, formData, payload);
       } else {
         await createRecipe(formData, payload);
       }
 
-      router.back();
+      safeGoBack(router, fallbackDestination);
     } catch (err) {
       Alert.alert(
         'Error al guardar',
@@ -152,59 +198,73 @@ export default function FormScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.keyboardWrapper}
+      style={[styles.keyboardWrapper, isDark && styles.keyboardWrapperDark]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.card}>
-          <Text style={styles.heading}>
-            {editing ? 'Editar receta' : 'Crear nueva receta'}
+        <View style={[styles.card, isDark && styles.cardDark]}>
+          <Text style={[styles.heading, isDark && styles.textDark]}>
+            {editingId ? 'Editar receta' : 'Crear nueva receta'}
           </Text>
 
-          <Text style={styles.label}>Título de la receta *</Text>
+          <Text style={[styles.label, isDark && styles.textDark]}>
+            Título de la receta *
+          </Text>
           <TextInput
             style={[
               styles.input,
-              validationErrors.title && styles.inputError,
+              isDark && styles.inputDark,
+              validationErrors.title &&
+                (isDark ? styles.inputErrorDark : styles.inputError),
             ]}
             placeholder="Ejemplo: Enchiladas suizas tradicionales"
-            placeholderTextColor="#888888"
+            placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
             value={title}
             onChangeText={setTitle}
           />
           {validationErrors.title && (
-            <Text style={styles.fieldError}>{validationErrors.title}</Text>
+            <Text style={[styles.fieldError, isDark && styles.fieldErrorDark]}>
+              {validationErrors.title}
+            </Text>
           )}
 
-          <Text style={styles.label}>Descripción y pasos de preparación *</Text>
+          <Text style={[styles.label, isDark && styles.textDark]}>
+            Descripción y pasos de preparación *
+          </Text>
           <TextInput
             style={[
               styles.input,
               styles.textArea,
-              validationErrors.description && styles.inputError,
+              isDark && styles.inputDark,
+              validationErrors.description &&
+                (isDark ? styles.inputErrorDark : styles.inputError),
             ]}
             placeholder="Describe los ingredientes y la preparación del platillo (mínimo 10 caracteres)..."
-            placeholderTextColor="#888888"
+            placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
             multiline
             numberOfLines={4}
             value={description}
             onChangeText={setDescription}
           />
           {validationErrors.description && (
-            <Text style={styles.fieldError}>
+            <Text style={[styles.fieldError, isDark && styles.fieldErrorDark]}>
               {validationErrors.description}
             </Text>
           )}
 
-          <Text style={styles.label}>Fotografía del platillo *</Text>
+          <Text style={[styles.label, isDark && styles.textDark]}>
+            Fotografía del platillo *
+          </Text>
           <Pressable
             onPress={pickImage}
             style={[
               styles.imagePicker,
-              validationErrors.imageUri && styles.inputError,
+              isDark && styles.imagePickerDark,
+              validationErrors.imageUri &&
+                (isDark ? styles.inputErrorDark : styles.inputError),
             ]}
           >
             {imageUri ? (
@@ -212,71 +272,93 @@ export default function FormScreen() {
             ) : (
               <View style={styles.placeholderBox}>
                 <Text style={styles.placeholderIcon}>📷</Text>
-                <Text style={styles.placeholderText}>
+                <Text
+                  style={[styles.placeholderText, isDark && styles.subTextDark]}
+                >
                   Toca para elegir una foto de tu galería
                 </Text>
               </View>
             )}
           </Pressable>
 
-          <Text style={styles.label}>O ingresa una URL de imagen:</Text>
+          <Text style={[styles.label, isDark && styles.textDark]}>
+            O ingresa una URL de imagen:
+          </Text>
           <TextInput
             style={[
               styles.input,
-              validationErrors.imageUri && styles.inputError,
+              isDark && styles.inputDark,
+              validationErrors.imageUri &&
+                (isDark ? styles.inputErrorDark : styles.inputError),
             ]}
             placeholder="https://ejemplo.com/mi-receta.jpg"
-            placeholderTextColor="#888888"
+            placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
             autoCapitalize="none"
             value={imageUri ?? ''}
             onChangeText={(text) => setImageUri(text)}
           />
           {validationErrors.imageUri && (
-            <Text style={styles.fieldError}>{validationErrors.imageUri}</Text>
+            <Text style={[styles.fieldError, isDark && styles.fieldErrorDark]}>
+              {validationErrors.imageUri}
+            </Text>
           )}
 
           <View style={styles.twoColRow}>
             <View style={styles.col}>
-              <Text style={styles.label}>Tiempo (HH:MM:SS) *</Text>
+              <Text style={[styles.label, isDark && styles.textDark]}>
+                Tiempo (HH:MM:SS) *
+              </Text>
               <TextInput
                 style={[
                   styles.input,
-                  validationErrors.prepareTime && styles.inputError,
+                  isDark && styles.inputDark,
+                  validationErrors.prepareTime &&
+                    (isDark ? styles.inputErrorDark : styles.inputError),
                 ]}
                 placeholder="00:45:00"
-                placeholderTextColor="#888888"
+                placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
                 value={prepareTime}
                 onChangeText={setPrepareTime}
               />
               {validationErrors.prepareTime && (
-                <Text style={styles.fieldError}>
+                <Text
+                  style={[styles.fieldError, isDark && styles.fieldErrorDark]}
+                >
                   {validationErrors.prepareTime}
                 </Text>
               )}
             </View>
 
             <View style={styles.col}>
-              <Text style={styles.label}>Aprobación (0 - 100) *</Text>
+              <Text style={[styles.label, isDark && styles.textDark]}>
+                Aprobación (0 - 100) *
+              </Text>
               <TextInput
                 style={[
                   styles.input,
-                  validationErrors.likeRate && styles.inputError,
+                  isDark && styles.inputDark,
+                  validationErrors.likeRate &&
+                    (isDark ? styles.inputErrorDark : styles.inputError),
                 ]}
                 placeholder="90"
-                placeholderTextColor="#888888"
+                placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
                 keyboardType="numeric"
                 value={likeRate}
                 onChangeText={setLikeRate}
               />
               {validationErrors.likeRate && (
-                <Text style={styles.fieldError}>
+                <Text
+                  style={[styles.fieldError, isDark && styles.fieldErrorDark]}
+                >
                   {validationErrors.likeRate}
                 </Text>
               )}
             </View>
           </View>
 
-          <Text style={styles.label}>Categoría *</Text>
+          <Text style={[styles.label, isDark && styles.textDark]}>
+            Categoría *
+          </Text>
           <View style={styles.chipsRow}>
             {VALID_RECIPE_CATEGORIES.map((cat) => {
               const selected = category === cat;
@@ -284,11 +366,16 @@ export default function FormScreen() {
                 <Pressable
                   key={cat}
                   onPress={() => setCategory(cat)}
-                  style={[styles.chip, selected && styles.chipSelected]}
+                  style={[
+                    styles.chip,
+                    isDark && styles.chipDark,
+                    selected && styles.chipSelected,
+                  ]}
                 >
                   <Text
                     style={[
                       styles.chipText,
+                      isDark && styles.chipTextDark,
                       selected && styles.chipTextSelected,
                     ]}
                   >
@@ -299,10 +386,14 @@ export default function FormScreen() {
             })}
           </View>
           {validationErrors.category && (
-            <Text style={styles.fieldError}>{validationErrors.category}</Text>
+            <Text style={[styles.fieldError, isDark && styles.fieldErrorDark]}>
+              {validationErrors.category}
+            </Text>
           )}
 
-          <Text style={styles.label}>Dificultad *</Text>
+          <Text style={[styles.label, isDark && styles.textDark]}>
+            Dificultad *
+          </Text>
           <View style={styles.chipsRow}>
             {VALID_RECIPE_DIFFICULTIES.map((diff) => {
               const selected = difficulty === diff;
@@ -312,12 +403,14 @@ export default function FormScreen() {
                   onPress={() => setDifficulty(diff)}
                   style={[
                     styles.chip,
+                    isDark && styles.chipDark,
                     selected && styles.chipSelectedSecondary,
                   ]}
                 >
                   <Text
                     style={[
                       styles.chipText,
+                      isDark && styles.chipTextDark,
                       selected && styles.chipTextSelected,
                     ]}
                   >
@@ -328,12 +421,14 @@ export default function FormScreen() {
             })}
           </View>
           {validationErrors.difficulty && (
-            <Text style={styles.fieldError}>{validationErrors.difficulty}</Text>
+            <Text style={[styles.fieldError, isDark && styles.fieldErrorDark]}>
+              {validationErrors.difficulty}
+            </Text>
           )}
 
           <View style={styles.actionsRow}>
             <Pressable
-              onPress={() => router.back()}
+              onPress={() => safeGoBack(router, fallbackDestination)}
               disabled={saving}
               style={[styles.cancelButton, saving && styles.buttonDisabled]}
             >
@@ -349,7 +444,7 @@ export default function FormScreen() {
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.buttonText}>
-                  {editing ? 'Actualizar receta' : 'Guardar receta'}
+                  {editingId ? 'Actualizar receta' : 'Guardar receta'}
                 </Text>
               )}
             </Pressable>
@@ -364,6 +459,9 @@ const styles = StyleSheet.create({
   keyboardWrapper: {
     flex: 1,
     backgroundColor: '#FAF7F5',
+  },
+  keyboardWrapperDark: {
+    backgroundColor: '#181312',
   },
   container: {
     padding: 16,
@@ -390,11 +488,21 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  cardDark: {
+    backgroundColor: '#241D1B',
+    borderColor: '#382E2B',
+  },
   heading: {
     fontSize: 22,
     fontWeight: 'bold',
     color: '#2C1E1B',
     marginBottom: 8,
+  },
+  textDark: {
+    color: '#F7F2F0',
+  },
+  subTextDark: {
+    color: '#B8A9A4',
   },
   label: {
     fontSize: 14,
@@ -412,9 +520,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFAFA',
     color: '#2C1E1B',
   },
+  inputDark: {
+    backgroundColor: '#181312',
+    borderColor: '#382E2B',
+    color: '#F7F2F0',
+  },
   inputError: {
     borderColor: '#C0392B',
     backgroundColor: '#FFF9F9',
+  },
+  inputErrorDark: {
+    borderColor: '#E74C3C',
+    backgroundColor: '#2C1918',
   },
   textArea: {
     minHeight: 100,
@@ -426,6 +543,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 4,
   },
+  fieldErrorDark: {
+    color: '#EC7063',
+  },
   imagePicker: {
     borderWidth: 2,
     borderColor: '#CCCCCC',
@@ -436,6 +556,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
     backgroundColor: '#FAFAFA',
+  },
+  imagePickerDark: {
+    backgroundColor: '#181312',
+    borderColor: '#4A3833',
   },
   previewImage: {
     width: '100%',
@@ -476,6 +600,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2D6D1',
   },
+  chipDark: {
+    backgroundColor: '#181312',
+    borderColor: '#382E2B',
+  },
   chipSelected: {
     backgroundColor: '#C0392B',
     borderColor: '#C0392B',
@@ -488,6 +616,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#4A3833',
+  },
+  chipTextDark: {
+    color: '#B8A9A4',
   },
   chipTextSelected: {
     color: '#FFFFFF',

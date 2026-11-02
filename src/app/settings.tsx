@@ -25,6 +25,7 @@ import {
   getUserSettings,
   resetLocalRecipeChanges,
   saveUserSettings,
+  useThemeMode,
 } from '../utils/preferencesStorage';
 import {
   deleteToken,
@@ -37,6 +38,8 @@ const PAGE_SIZES: PageSizeOption[] = [10, 20, 30];
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const isDarkTheme = useThemeMode();
+
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
   const [session, setSession] = useState<UserSession | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,6 +77,9 @@ export default function SettingsScreen() {
               const profile = await getUserProfile(storedSession.id);
               if (isActive && profile?.email) {
                 setNewEmail(profile.email);
+                setSession((prev) =>
+                  prev ? { ...prev, email: profile.email } : prev
+                );
               }
             } catch (profileErr) {
               console.warn(
@@ -113,10 +119,13 @@ export default function SettingsScreen() {
       return;
     }
 
+    const effectiveNewPassword =
+      newPassword.trim().length > 0 ? newPassword : currentPassword;
+
     const validation = validateCredentialsForm(
       currentPassword,
       newEmail,
-      newPassword
+      effectiveNewPassword
     );
     if (!validation.isValid) {
       const msg = validation.errorMessage || 'Verifica los campos ingresados.';
@@ -139,7 +148,7 @@ export default function SettingsScreen() {
       const updateResult = await updateCredentials(
         session.id,
         newEmail,
-        newPassword
+        effectiveNewPassword
       );
 
       const updatedSession: UserSession = {
@@ -180,7 +189,7 @@ export default function SettingsScreen() {
     router.replace('/');
   };
 
-  const isDark = settings.themeMode === 'dark';
+  const isDark = isDarkTheme || settings.themeMode === 'dark';
 
   if (loading) {
     return (
@@ -312,7 +321,7 @@ export default function SettingsScreen() {
             </Pressable>
           </View>
 
-          <View style={styles.switchRow}>
+          <View style={[styles.switchRow, isDark && styles.switchRowDark]}>
             <View style={styles.switchLabelBox}>
               <Text style={[styles.label, isDark && styles.textDark]}>
                 Modo de tarjetas compactas
@@ -326,7 +335,7 @@ export default function SettingsScreen() {
               onValueChange={(value) =>
                 handleUpdateSetting({ compactCards: value })
               }
-              trackColor={{ false: '#CCCCCC', true: '#C0392B' }}
+              trackColor={{ false: isDark ? '#382E2B' : '#CCCCCC', true: '#C0392B' }}
             />
           </View>
         </View>
@@ -341,13 +350,26 @@ export default function SettingsScreen() {
           </Text>
 
           {credentialsError && (
-            <View style={styles.errorBanner}>
-              <Text style={styles.errorText}>{credentialsError}</Text>
+            <View
+              style={[styles.errorBanner, isDark && styles.errorBannerDark]}
+            >
+              <Text style={[styles.errorText, isDark && styles.errorTextDark]}>
+                {credentialsError}
+              </Text>
             </View>
           )}
           {credentialsMessage && (
-            <View style={styles.successBanner}>
-              <Text style={styles.successText}>{credentialsMessage}</Text>
+            <View
+              style={[
+                styles.successBanner,
+                isDark && styles.successBannerDark,
+              ]}
+            >
+              <Text
+                style={[styles.successText, isDark && styles.successTextDark]}
+              >
+                {credentialsMessage}
+              </Text>
             </View>
           )}
 
@@ -357,7 +379,7 @@ export default function SettingsScreen() {
           <TextInput
             style={[styles.input, isDark && styles.inputDark]}
             placeholder="Ingresa tu contraseña actual"
-            placeholderTextColor="#888888"
+            placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
             secureTextEntry
             value={currentPassword}
             onChangeText={setCurrentPassword}
@@ -369,7 +391,7 @@ export default function SettingsScreen() {
           <TextInput
             style={[styles.input, isDark && styles.inputDark]}
             placeholder="nuevo@correo.com"
-            placeholderTextColor="#888888"
+            placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
             keyboardType="email-address"
             autoCapitalize="none"
             value={newEmail}
@@ -382,7 +404,7 @@ export default function SettingsScreen() {
           <TextInput
             style={[styles.input, isDark && styles.inputDark]}
             placeholder="Mínimo 4 caracteres"
-            placeholderTextColor="#888888"
+            placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
             secureTextEntry
             value={newPassword}
             onChangeText={setNewPassword}
@@ -537,6 +559,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F0EAE7',
   },
+  switchRowDark: {
+    borderTopColor: '#382E2B',
+  },
   switchLabelBox: {
     flex: 1,
     paddingRight: 12,
@@ -563,10 +588,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F5B7B1',
   },
+  errorBannerDark: {
+    backgroundColor: '#3A1F1E',
+    borderColor: '#78281F',
+  },
   errorText: {
     color: '#C0392B',
     fontSize: 13,
     fontWeight: '600',
+  },
+  errorTextDark: {
+    color: '#EC7063',
   },
   successBanner: {
     backgroundColor: '#E8F8F0',
@@ -576,10 +608,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#A9DFBF',
   },
+  successBannerDark: {
+    backgroundColor: '#1B3124',
+    borderColor: '#27AE60',
+  },
   successText: {
     color: '#1E8449',
     fontSize: 13,
     fontWeight: '600',
+  },
+  successTextDark: {
+    color: '#58D68D',
   },
   primaryButton: {
     backgroundColor: '#27AE60',

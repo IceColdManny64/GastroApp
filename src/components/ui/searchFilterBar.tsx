@@ -187,14 +187,24 @@ export default function SearchFilterBar({
         </Pressable>
       </ScrollView>
 
-      <View style={styles.summaryRow}>
+      <View style={[styles.summaryRow, darkMode && styles.summaryRowDark]}>
         <Text style={[styles.summaryText, darkMode && styles.summaryTextDark]}>
           {totalResults}{' '}
           {totalResults === 1 ? 'receta encontrada' : 'recetas encontradas'}
         </Text>
         {hasActiveFilters && (
-          <Pressable onPress={onResetFilters} style={styles.clearButton}>
-            <Text style={styles.clearButtonText}>Limpiar filtros</Text>
+          <Pressable
+            onPress={onResetFilters}
+            style={[styles.clearButton, darkMode && styles.clearButtonDark]}
+          >
+            <Text
+              style={[
+                styles.clearButtonText,
+                darkMode && styles.clearButtonTextDark,
+              ]}
+            >
+              Limpiar filtros
+            </Text>
           </Pressable>
         )}
       </View>
@@ -307,6 +317,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F0EAE7',
   },
+  summaryRowDark: {
+    borderTopColor: '#382E2B',
+  },
   summaryText: {
     fontSize: 13,
     color: '#666666',
@@ -321,9 +334,15 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#FDEDEC',
   },
+  clearButtonDark: {
+    backgroundColor: '#3A1F1E',
+  },
   clearButtonText: {
     color: '#C0392B',
     fontSize: 12,
     fontWeight: '700',
+  },
+  clearButtonTextDark: {
+    color: '#EC7063',
   },
 });

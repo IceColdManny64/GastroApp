@@ -66,11 +66,30 @@ export const getUserSession = async (): Promise<UserSession | null> => {
     }
     if (raw) {
       sessionInMemory = JSON.parse(raw) as UserSession;
+      return sessionInMemory;
     }
   } catch (err) {
     console.warn('[tokenStorage.ts] Usando sesión en memoria:', err);
   }
-  return sessionInMemory;
+
+  if (sessionInMemory) {
+    return sessionInMemory;
+  }
+
+  const token = await getToken();
+  if (token) {
+    const match = /^gastrolab-token-(\d+)-/.exec(token);
+    if (match && match[1]) {
+      sessionInMemory = {
+        id: Number(match[1]),
+        email: '',
+        token,
+      };
+      return sessionInMemory;
+    }
+  }
+
+  return null;
 };
 
 export const deleteToken = async (): Promise<void> => {

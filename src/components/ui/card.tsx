@@ -17,15 +17,21 @@ export interface CardProps {
   onPress?: () => void;
 }
 
-const getDifficultyColors = (difficulty: string) => {
+const getDifficultyColors = (difficulty: string, darkMode: boolean) => {
   const normalized = difficulty.toLowerCase();
   if (normalized.includes('dificil')) {
-    return { bg: '#FDEDEC', text: '#C0392B' };
+    return darkMode
+      ? { bg: '#3A1F1E', text: '#EC7063' }
+      : { bg: '#FDEDEC', text: '#C0392B' };
   }
   if (normalized.includes('medio')) {
-    return { bg: '#FEF5E7', text: '#B9770E' };
+    return darkMode
+      ? { bg: '#33261A', text: '#F5B041' }
+      : { bg: '#FEF5E7', text: '#B9770E' };
   }
-  return { bg: '#E8F8F0', text: '#1E8449' };
+  return darkMode
+    ? { bg: '#1B3124', text: '#58D68D' }
+    : { bg: '#E8F8F0', text: '#1E8449' };
 };
 
 const Card = ({
@@ -48,7 +54,7 @@ const Card = ({
     setImageSourceUri(image || DEFAULT_RECIPE_IMAGE);
   }, [image]);
 
-  const diffColors = getDifficultyColors(difficulty);
+  const diffColors = getDifficultyColors(difficulty, darkMode);
 
   return (
     <Pressable
@@ -62,10 +68,14 @@ const Card = ({
       <View style={styles.imageWrapper}>
         <Image
           source={{ uri: imageSourceUri }}
-          style={[styles.image, compact && styles.imageCompact]}
+          style={[
+            styles.image,
+            compact && styles.imageCompact,
+            darkMode && styles.imageDark,
+          ]}
           onError={() => setImageSourceUri(DEFAULT_RECIPE_IMAGE)}
         />
-        <View style={styles.categoryBadge}>
+        <View style={[styles.categoryBadge, darkMode && styles.categoryBadgeDark]}>
           <Text style={styles.categoryBadgeText}>{category}</Text>
         </View>
         {onToggleFavorite && (
@@ -76,7 +86,11 @@ const Card = ({
             }}
             style={[
               styles.favoriteButton,
-              isFavorite && styles.favoriteButtonActive,
+              darkMode && styles.favoriteButtonDark,
+              isFavorite &&
+                (darkMode
+                  ? styles.favoriteButtonActiveDark
+                  : styles.favoriteButtonActive),
             ]}
             accessibilityLabel={
               isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'
@@ -85,7 +99,11 @@ const Card = ({
             <Text
               style={[
                 styles.favoriteIcon,
-                isFavorite && styles.favoriteIconActive,
+                darkMode && styles.favoriteIconDark,
+                isFavorite &&
+                  (darkMode
+                    ? styles.favoriteIconActiveDark
+                    : styles.favoriteIconActive),
               ]}
             >
               {isFavorite ? '♥' : '♡'}
@@ -109,8 +127,12 @@ const Card = ({
         </Text>
 
         <View style={styles.metaRow}>
-          <View style={styles.timePill}>
-            <Text style={styles.timePillText}>⏱️ {prepareTime}</Text>
+          <View style={[styles.timePill, darkMode && styles.timePillDark]}>
+            <Text
+              style={[styles.timePillText, darkMode && styles.timePillTextDark]}
+            >
+              ⏱️ {prepareTime}
+            </Text>
           </View>
 
           <View
@@ -124,8 +146,12 @@ const Card = ({
             </Text>
           </View>
 
-          <View style={styles.likePill}>
-            <Text style={styles.likePillText}>👍 {likeRate}%</Text>
+          <View style={[styles.likePill, darkMode && styles.likePillDark]}>
+            <Text
+              style={[styles.likePillText, darkMode && styles.likePillTextDark]}
+            >
+              👍 {likeRate}%
+            </Text>
           </View>
         </View>
       </View>
@@ -174,6 +200,9 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
     backgroundColor: '#E5DDD9',
   },
+  imageDark: {
+    backgroundColor: '#181312',
+  },
   imageCompact: {
     height: 130,
   },
@@ -181,10 +210,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 12,
     left: 12,
-    backgroundColor: 'rgba(117, 51, 51, 0.9)',
+    backgroundColor: 'rgba(117, 51, 51, 0.92)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 16,
+  },
+  categoryBadgeDark: {
+    backgroundColor: 'rgba(231, 76, 60, 0.92)',
   },
   categoryBadgeText: {
     color: '#FFFFFF',
@@ -202,15 +234,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  favoriteButtonDark: {
+    backgroundColor: 'rgba(36, 29, 27, 0.92)',
+    borderWidth: 1,
+    borderColor: '#4A3833',
+  },
   favoriteButtonActive: {
     backgroundColor: '#FDEDEC',
+  },
+  favoriteButtonActiveDark: {
+    backgroundColor: '#3A1F1E',
+    borderColor: '#E74C3C',
   },
   favoriteIcon: {
     fontSize: 18,
     color: '#555555',
   },
+  favoriteIconDark: {
+    color: '#B8A9A4',
+  },
   favoriteIconActive: {
     color: '#C0392B',
+  },
+  favoriteIconActiveDark: {
+    color: '#EC7063',
   },
   content: {
     padding: 16,
@@ -245,10 +292,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
   },
+  timePillDark: {
+    backgroundColor: '#33261A',
+  },
   timePillText: {
     color: '#B9770E',
     fontSize: 12,
     fontWeight: '600',
+  },
+  timePillTextDark: {
+    color: '#F5B041',
   },
   difficultyPill: {
     paddingHorizontal: 10,
@@ -265,9 +318,15 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
   },
+  likePillDark: {
+    backgroundColor: '#1B3124',
+  },
   likePillText: {
     color: '#27AE60',
     fontSize: 12,
     fontWeight: '700',
+  },
+  likePillTextDark: {
+    color: '#58D68D',
   },
 });
