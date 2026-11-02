@@ -26,11 +26,14 @@ import {
   getUserSettings,
   saveUserSettings,
   toggleFavorite,
+  useThemeMode,
 } from '../utils/preferencesStorage';
 import { deleteToken, getToken } from '../utils/tokenStorage';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const isDarkTheme = useThemeMode();
+
   const [recipes, setRecipes] = useState<RecipeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -193,7 +196,7 @@ export default function HomeScreen() {
     return filteredRecipes.slice(start, start + itemsPerPage);
   }, [filteredRecipes, safeCurrentPage, itemsPerPage]);
 
-  const isDark = userSettings.themeMode === 'dark';
+  const isDark = isDarkTheme || userSettings.themeMode === 'dark';
 
   if (loading) {
     return (
@@ -212,7 +215,9 @@ export default function HomeScreen() {
   if (error) {
     return (
       <View style={[styles.centered, isDark && styles.centeredDark]}>
-        <Text style={styles.errorText}>{error}</Text>
+        <Text style={[styles.errorText, isDark && styles.errorTextDark]}>
+          {error}
+        </Text>
         <Pressable onPress={fetchRecipes} style={styles.retryButton}>
           <Text style={styles.retryText}>Reintentar</Text>
         </Pressable>
@@ -404,6 +409,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
     fontWeight: '600',
+  },
+  errorTextDark: {
+    color: '#EC7063',
   },
   retryButton: {
     backgroundColor: '#C0392B',

@@ -13,10 +13,13 @@ import {
   View,
 } from 'react-native';
 import { registerUser } from '../utils/auth';
+import { useThemeMode } from '../utils/preferencesStorage';
 import { validateAuthForm } from '../utils/validators';
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const isDark = useThemeMode();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -57,30 +60,38 @@ export default function RegisterScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.keyboardWrapper}
+      style={[styles.keyboardWrapper, isDark && styles.keyboardWrapperDark]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.card}>
-          <Text style={styles.title}>Crear nueva cuenta</Text>
-          <Text style={styles.subtitle}>
+        <View style={[styles.card, isDark && styles.cardDark]}>
+          <Text style={[styles.title, isDark && styles.textDark]}>
+            Crear nueva cuenta
+          </Text>
+          <Text style={[styles.subtitle, isDark && styles.subTextDark]}>
             Únete a GastroLab para publicar y administrar tus recetas
           </Text>
 
           {errorMessage && (
-            <View style={styles.errorBanner}>
-              <Text style={styles.errorText}>{errorMessage}</Text>
+            <View
+              style={[styles.errorBanner, isDark && styles.errorBannerDark]}
+            >
+              <Text style={[styles.errorText, isDark && styles.errorTextDark]}>
+                {errorMessage}
+              </Text>
             </View>
           )}
 
-          <Text style={styles.label}>Correo electrónico</Text>
+          <Text style={[styles.label, isDark && styles.textDark]}>
+            Correo electrónico
+          </Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, isDark && styles.inputDark]}
             placeholder="Correo electrónico"
-            placeholderTextColor="#888888"
+            placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
@@ -88,21 +99,25 @@ export default function RegisterScreen() {
             onChangeText={setEmail}
           />
 
-          <Text style={styles.label}>Contraseña</Text>
+          <Text style={[styles.label, isDark && styles.textDark]}>
+            Contraseña
+          </Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, isDark && styles.inputDark]}
             placeholder="Mínimo 4 caracteres"
-            placeholderTextColor="#888888"
+            placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
             secureTextEntry
             value={password}
             onChangeText={setPassword}
           />
 
-          <Text style={styles.label}>Confirmar contraseña</Text>
+          <Text style={[styles.label, isDark && styles.textDark]}>
+            Confirmar contraseña
+          </Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, isDark && styles.inputDark]}
             placeholder="Repite tu contraseña"
-            placeholderTextColor="#888888"
+            placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
             secureTextEntry
             value={confirmPassword}
             onChangeText={setConfirmPassword}
@@ -125,7 +140,7 @@ export default function RegisterScreen() {
             onPress={() => router.replace('/')}
             style={styles.linkButton}
           >
-            <Text style={styles.linkText}>
+            <Text style={[styles.linkText, isDark && styles.linkTextDark]}>
               ¿Ya tienes cuenta? Inicia sesión aquí
             </Text>
           </Pressable>
@@ -139,6 +154,9 @@ const styles = StyleSheet.create({
   keyboardWrapper: {
     flex: 1,
     backgroundColor: '#FAF7F5',
+  },
+  keyboardWrapperDark: {
+    backgroundColor: '#181312',
   },
   scrollContainer: {
     flexGrow: 1,
@@ -167,6 +185,10 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  cardDark: {
+    backgroundColor: '#241D1B',
+    borderColor: '#382E2B',
+  },
   title: {
     fontSize: 22,
     fontWeight: 'bold',
@@ -178,6 +200,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 12,
   },
+  textDark: {
+    color: '#F7F2F0',
+  },
+  subTextDark: {
+    color: '#B8A9A4',
+  },
   errorBanner: {
     backgroundColor: '#FDEDEC',
     borderRadius: 8,
@@ -186,10 +214,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F5B7B1',
   },
+  errorBannerDark: {
+    backgroundColor: '#3A1F1E',
+    borderColor: '#78281F',
+  },
   errorText: {
     color: '#C0392B',
     fontSize: 13,
     fontWeight: '600',
+  },
+  errorTextDark: {
+    color: '#EC7063',
   },
   label: {
     fontSize: 14,
@@ -206,6 +241,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#FAFAFA',
     color: '#2C1E1B',
+  },
+  inputDark: {
+    backgroundColor: '#181312',
+    borderColor: '#382E2B',
+    color: '#F7F2F0',
   },
   primaryButton: {
     backgroundColor: '#C0392B',
@@ -231,5 +271,8 @@ const styles = StyleSheet.create({
     color: '#753333',
     fontSize: 14,
     fontWeight: '700',
+  },
+  linkTextDark: {
+    color: '#EC7063',
   },
 });

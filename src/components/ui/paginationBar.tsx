@@ -29,7 +29,7 @@ export default function PaginationBar({
 
   return (
     <View style={[styles.container, darkMode && styles.containerDark]}>
-      <View style={styles.pageSizeRow}>
+      <View style={[styles.pageSizeRow, darkMode && styles.pageSizeRowDark]}>
         <Text style={[styles.label, darkMode && styles.labelDark]}>
           Elementos por página:
         </Text>
@@ -119,6 +119,9 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F0EAE7',
+  },
+  pageSizeRowDark: {
+    borderBottomColor: '#382E2B',
   },
   label: {
     fontSize: 13,

@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { UserSettings } from '../types/Auth';
 import { RecipeItem } from '../types/RecipeItem';
@@ -6,6 +7,7 @@ import { getUserSession } from './tokenStorage';
 
 const FAVORITES_PREFIX = 'gastrolab_favorites_';
 const SETTINGS_PREFIX = 'gastrolab_settings_';
+const GLOBAL_THEME_KEY = 'gastrolab_global_theme';
 const CRUD_OVERLAY_KEY = 'gastrolab_crud_overlay';
 
 export interface CrudOverlayState {
@@ -22,6 +24,21 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
 };
 
 const memoryCache: Record<string, string> = {};
+let cachedThemeMode: 'light' | 'dark' = 'light';
+let themeInitialized = false;
+const themeListeners = new Set<(mode: 'light' | 'dark') => void>();
+
+const notifyThemeListeners = (mode: 'light' | 'dark') => {
+  cachedThemeMode = mode;
+  themeInitialized = true;
+  themeListeners.forEach((listener) => {
+    try {
+      listener(mode);
+    } catch (err) {
+      console.warn('[preferencesStorage.ts] Error en listener de tema:', err);
+    }
+  });
+};
 
 const readStorageItem = async (key: string): Promise<string | null> => {
   try {
@@ -30,9 +47,12 @@ const readStorageItem = async (key: string): Promise<string | null> => {
       if (value !== null) memoryCache[key] = value;
       return value;
     }
+    if (memoryCache[key] !== undefined) {
+      return memoryCache[key];
+    }
     const value = await SecureStore.getItemAsync(key);
     if (value !== null) memoryCache[key] = value;
-    return value ?? memoryCache[key] ?? null;
+    return value ?? null;
   } catch (err) {
     console.warn(`[preferencesStorage.ts] Fallback a memoria al leer ${key}:`, err);
     return memoryCache[key] ?? null;
@@ -44,7 +64,7 @@ const writeStorageItem = async (key: string, value: string): Promise<void> => {
   try {
     if (Platform.OS === 'web') {
       localStorage.setItem(key, value);
-    } else {
+    } else if (value.length <= 1950) {
       await SecureStore.setItemAsync(key, value);
     }
   } catch (err) {
@@ -100,30 +120,90 @@ export const toggleFavorite = async (recipeId: number): Promise<number[]> => {
 
 export const getUserSettings = async (): Promise<UserSettings> => {
   const suffix = await getUserKeySuffix();
-  const raw = await readStorageItem(`${SETTINGS_PREFIX}${suffix}`);
-  if (!raw) return { ...DEFAULT_USER_SETTINGS };
+  const [raw, globalTheme] = await Promise.all([
+    readStorageItem(`${SETTINGS_PREFIX}${suffix}`),
+    readStorageItem(GLOBAL_THEME_KEY),
+  ]);
+
+  const fallbackTheme: 'light' | 'dark' =
+    globalTheme === 'dark' ? 'dark' : 'light';
+
+  if (!raw) {
+    const defaults: UserSettings = {
+      ...DEFAULT_USER_SETTINGS,
+      themeMode: fallbackTheme,
+    };
+    notifyThemeListeners(defaults.themeMode);
+    return defaults;
+  }
+
   try {
     const parsed = JSON.parse(raw) as Partial<UserSettings>;
     const validPageSize =
       parsed.itemsPerPage === 10 || parsed.itemsPerPage === 20 || parsed.itemsPerPage === 30
         ? parsed.itemsPerPage
         : DEFAULT_USER_SETTINGS.itemsPerPage;
-    return {
+    const resolvedTheme: 'light' | 'dark' =
+      parsed.themeMode === 'dark'
+        ? 'dark'
+        : parsed.themeMode === 'light'
+          ? 'light'
+          : fallbackTheme;
+
+    const settings: UserSettings = {
       itemsPerPage: validPageSize,
-      themeMode: parsed.themeMode === 'dark' ? 'dark' : 'light',
+      themeMode: resolvedTheme,
       defaultCategory: parsed.defaultCategory || 'Todas',
       compactCards: Boolean(parsed.compactCards),
     };
+    notifyThemeListeners(settings.themeMode);
+    return settings;
   } catch (err) {
     console.warn('[preferencesStorage.ts] Error parseando settings:', err);
-    return { ...DEFAULT_USER_SETTINGS };
+    return { ...DEFAULT_USER_SETTINGS, themeMode: fallbackTheme };
   }
 };
 
 export const saveUserSettings = async (settings: UserSettings): Promise<UserSettings> => {
   const suffix = await getUserKeySuffix();
-  await writeStorageItem(`${SETTINGS_PREFIX}${suffix}`, JSON.stringify(settings));
+  notifyThemeListeners(settings.themeMode);
+  await Promise.all([
+    writeStorageItem(`${SETTINGS_PREFIX}${suffix}`, JSON.stringify(settings)),
+    writeStorageItem(GLOBAL_THEME_KEY, settings.themeMode),
+  ]);
   return settings;
+};
+
+export const useThemeMode = (): boolean => {
+  const [mode, setMode] = useState<'light' | 'dark'>(() => {
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      const storedGlobal = localStorage.getItem(GLOBAL_THEME_KEY);
+      if (storedGlobal === 'dark' || storedGlobal === 'light') {
+        cachedThemeMode = storedGlobal;
+        return storedGlobal;
+      }
+    }
+    return cachedThemeMode;
+  });
+
+  useEffect(() => {
+    const listener = (nextMode: 'light' | 'dark') => {
+      setMode(nextMode);
+    };
+    themeListeners.add(listener);
+
+    if (!themeInitialized) {
+      getUserSettings().catch(() => {});
+    } else {
+      setMode(cachedThemeMode);
+    }
+
+    return () => {
+      themeListeners.delete(listener);
+    };
+  }, []);
+
+  return mode === 'dark';
 };
 
 export const getCrudOverlay = async (): Promise<CrudOverlayState> => {
