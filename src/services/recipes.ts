@@ -1,21 +1,17 @@
+import { INITIAL_RECIPES_DATA } from '../data/recipesData';
 import { RecipeItem, RawRecipeDto, RecipeFormPayload } from '../types/RecipeItem';
-import { fetchWithAuth } from '../utils/api';
 import { getCrudOverlay, saveCrudOverlay } from '../utils/preferencesStorage';
-
-const ENDPOINT = '/recipe.php';
+import { getToken } from '../utils/tokenStorage';
 
 export const DEFAULT_RECIPE_IMAGE =
   'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80';
 
-interface RecipeMutationResponse {
-  status?: string;
-  store?: string;
-  update?: string;
-  delete?: string;
-  id?: number | string;
-  affected_rows?: number;
-  error?: string;
-}
+const ensureAuthenticated = async (): Promise<void> => {
+  const token = await getToken();
+  if (!token) {
+    throw new Error('Sesión no encontrada. Por favor inicia sesión nuevamente.');
+  }
+};
 
 export const adaptRecipeDtoToItem = (raw: RawRecipeDto): RecipeItem => {
   const numericId = Number(raw.id);
@@ -55,45 +51,49 @@ export const adaptRecipeDtoToItem = (raw: RawRecipeDto): RecipeItem => {
 };
 
 export async function getRecipes(search?: string): Promise<RecipeItem[]> {
-  const query = search && search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
-  const data = await fetchWithAuth<RawRecipeDto[]>(`${ENDPOINT}${query}`);
-  console.log('[recipes.ts] Respuesta del backend:', data?.length);
+  await ensureAuthenticated();
 
   const overlay = await getCrudOverlay();
   const deletedSet = new Set(overlay.deletedRecipeIds.map((id) => Number(id)));
-
-  const serverItems = Array.isArray(data)
-    ? data
-        .map(adaptRecipeDtoToItem)
-        .filter((item) => !deletedSet.has(item.id))
-        .map((item) => {
-          const updated = overlay.updatedRecipesById[String(item.id)];
-          return updated ? { ...item, ...updated, id: item.id } : item;
-        })
-    : [];
-
-  const serverIds = new Set(serverItems.map((item) => item.id));
   const normalizedSearch = search?.trim().toLowerCase() || '';
 
-  const localCreated = overlay.createdRecipes
-    .filter((item) => !deletedSet.has(item.id) && !serverIds.has(item.id))
+  const baseItems = INITIAL_RECIPES_DATA.map(adaptRecipeDtoToItem)
+    .filter((item) => !deletedSet.has(item.id))
     .map((item) => {
       const updated = overlay.updatedRecipesById[String(item.id)];
       return updated ? { ...item, ...updated, id: item.id } : item;
-    })
-    .filter((item) => {
-      if (!normalizedSearch) return true;
-      return (
-        item.title.toLowerCase().includes(normalizedSearch) ||
-        item.description.toLowerCase().includes(normalizedSearch) ||
-        item.category.toLowerCase().includes(normalizedSearch)
-      );
     });
 
-  return [...localCreated, ...serverItems];
+  const baseIds = new Set(baseItems.map((item) => item.id));
+
+  const localCreated = overlay.createdRecipes
+    .filter((item) => !deletedSet.has(item.id) && !baseIds.has(item.id))
+    .map((item) => {
+      const updated = overlay.updatedRecipesById[String(item.id)];
+      return updated ? { ...item, ...updated, id: item.id } : item;
+    });
+
+  const combined = [...localCreated, ...baseItems];
+
+  if (!normalizedSearch) {
+    console.log('[recipes.ts] Recetas cargadas en catálogo:', combined.length);
+    return combined;
+  }
+
+  const filtered = combined.filter(
+    (item) =>
+      item.title.toLowerCase().includes(normalizedSearch) ||
+      item.description.toLowerCase().includes(normalizedSearch) ||
+      item.category.toLowerCase().includes(normalizedSearch)
+  );
+
+  console.log('[recipes.ts] Recetas filtradas por búsqueda:', filtered.length);
+  return filtered;
 }
 
 export async function getRecipe(id: number): Promise<RecipeItem> {
+  await ensureAuthenticated();
+
   const numericId = Number(id);
   const overlay = await getCrudOverlay();
 
@@ -101,14 +101,24 @@ export async function getRecipe(id: number): Promise<RecipeItem> {
     throw new Error('La receta solicitada fue eliminada.');
   }
 
-  const createdLocal = overlay.createdRecipes.find((item) => Number(item.id) === numericId);
+  const createdLocal = overlay.createdRecipes.find(
+    (item) => Number(item.id) === numericId
+  );
   if (createdLocal) {
     const updatedLocal = overlay.updatedRecipesById[String(numericId)];
-    return updatedLocal ? { ...createdLocal, ...updatedLocal, id: numericId } : createdLocal;
+    return updatedLocal
+      ? { ...createdLocal, ...updatedLocal, id: numericId }
+      : createdLocal;
   }
 
-  const data = await fetchWithAuth<RawRecipeDto>(`${ENDPOINT}?id=${numericId}`);
-  const adapted = adaptRecipeDtoToItem(data);
+  const rawFound = INITIAL_RECIPES_DATA.find(
+    (item) => Number(item.id) === numericId
+  );
+  if (!rawFound) {
+    throw new Error('No se encontró la receta solicitada.');
+  }
+
+  const adapted = adaptRecipeDtoToItem(rawFound);
   const updatedLocal = overlay.updatedRecipesById[String(numericId)];
 
   return updatedLocal ? { ...adapted, ...updatedLocal, id: numericId } : adapted;
@@ -118,45 +128,30 @@ export async function createRecipe(
   _formData: FormData,
   payload: RecipeFormPayload
 ): Promise<RecipeItem> {
+  await ensureAuthenticated();
+
   const cleanImage = payload.imageUri.trim() || DEFAULT_RECIPE_IMAGE;
-  const requestPayload = {
-    action: 'create',
+  const overlay = await getCrudOverlay();
+
+  const maxExistingId = [
+    ...INITIAL_RECIPES_DATA.map((r) => Number(r.id) || 0),
+    ...overlay.createdRecipes.map((r) => Number(r.id) || 0),
+  ].reduce((max, current) => Math.max(max, current), 30);
+
+  const newRecipe: RecipeItem = {
+    id: maxExistingId + 1,
     title: payload.title.trim(),
     description: payload.description.trim(),
+    image: cleanImage,
     imageURL: cleanImage,
-    preparetime: payload.prepareTime.trim(),
-    likerate: Math.round(Number(payload.likeRate)),
+    prepareTime: payload.prepareTime.trim(),
+    likeRate: Math.round(Number(payload.likeRate)),
     category: payload.category.trim(),
     difficulty: payload.difficulty.trim(),
   };
 
-  const serverRes = await fetchWithAuth<RecipeMutationResponse | null>(ENDPOINT, {
-    method: 'POST',
-    body: JSON.stringify(requestPayload),
-  });
-
-  const serverAssignedId =
-    serverRes && serverRes.id && Number.isFinite(Number(serverRes.id))
-      ? Number(serverRes.id)
-      : null;
-
-  const newRecipe: RecipeItem = {
-    id: serverAssignedId ?? Date.now(),
-    title: requestPayload.title,
-    description: requestPayload.description,
-    image: cleanImage,
-    imageURL: cleanImage,
-    prepareTime: requestPayload.preparetime,
-    likeRate: requestPayload.likerate,
-    category: requestPayload.category,
-    difficulty: requestPayload.difficulty,
-  };
-
-  const overlay = await getCrudOverlay();
-  if (!serverAssignedId) {
-    overlay.createdRecipes = [newRecipe, ...overlay.createdRecipes];
-    await saveCrudOverlay(overlay);
-  }
+  overlay.createdRecipes = [newRecipe, ...overlay.createdRecipes];
+  await saveCrudOverlay(overlay);
 
   console.log('[recipes.ts] Receta creada exitosamente:', newRecipe.id);
   return newRecipe;
@@ -167,49 +162,21 @@ export async function updateRecipe(
   _formData: FormData,
   payload: RecipeFormPayload
 ): Promise<RecipeItem> {
+  await ensureAuthenticated();
+
   const numericId = Number(id);
   const cleanImage = payload.imageUri.trim() || DEFAULT_RECIPE_IMAGE;
 
-  const requestPayload = {
-    action: 'update',
+  const updatedItem: RecipeItem = {
     id: numericId,
     title: payload.title.trim(),
     description: payload.description.trim(),
-    imageURL: cleanImage,
-    preparetime: payload.prepareTime.trim(),
-    likerate: Math.round(Number(payload.likeRate)),
-    category: payload.category.trim(),
-    difficulty: payload.difficulty.trim(),
-  };
-
-  let serverRes = await fetchWithAuth<RecipeMutationResponse | null>(
-    `${ENDPOINT}?id=${numericId}`,
-    {
-      method: 'PUT',
-      body: JSON.stringify(requestPayload),
-    }
-  );
-
-  if (!serverRes) {
-    serverRes = await fetchWithAuth<RecipeMutationResponse | null>(
-      `${ENDPOINT}?id=${numericId}`,
-      {
-        method: 'POST',
-        body: JSON.stringify(requestPayload),
-      }
-    );
-  }
-
-  const updatedItem: RecipeItem = {
-    id: numericId,
-    title: requestPayload.title,
-    description: requestPayload.description,
     image: cleanImage,
     imageURL: cleanImage,
-    prepareTime: requestPayload.preparetime,
-    likeRate: requestPayload.likerate,
-    category: requestPayload.category,
-    difficulty: requestPayload.difficulty,
+    prepareTime: payload.prepareTime.trim(),
+    likeRate: Math.round(Number(payload.likeRate)),
+    category: payload.category.trim(),
+    difficulty: payload.difficulty.trim(),
   };
 
   const overlay = await getCrudOverlay();
@@ -224,26 +191,11 @@ export async function updateRecipe(
 }
 
 export async function deleteRecipe(id: number): Promise<void> {
+  await ensureAuthenticated();
+
   const numericId = Number(id);
-
-  const deleteRes = await fetchWithAuth<RecipeMutationResponse | null>(
-    `${ENDPOINT}?id=${numericId}`,
-    {
-      method: 'DELETE',
-    }
-  );
-
-  if (!deleteRes) {
-    await fetchWithAuth<RecipeMutationResponse | null>(
-      `${ENDPOINT}?id=${numericId}`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ action: 'delete', id: numericId }),
-      }
-    );
-  }
-
   const overlay = await getCrudOverlay();
+
   if (!overlay.deletedRecipeIds.includes(numericId)) {
     overlay.deletedRecipeIds.push(numericId);
   }

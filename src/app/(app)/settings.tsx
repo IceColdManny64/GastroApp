@@ -12,37 +12,40 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import {
   getUserProfile,
   updateCredentials,
   verifyPassword,
-} from '../services/user';
-import { PageSizeOption, UserSession, UserSettings } from '../types/Auth';
-import { RECIPE_CATEGORIES, RecipeCategory } from '../types/RecipeItem';
+} from '@/services/user';
+import { PageSizeOption, UserSession, UserSettings } from '@/types/Auth';
+import { RECIPE_CATEGORIES, RecipeCategory } from '@/types/RecipeItem';
 import {
   DEFAULT_USER_SETTINGS,
   getUserSettings,
   resetLocalRecipeChanges,
   saveUserSettings,
   useThemeMode,
-} from '../utils/preferencesStorage';
+} from '@/utils/preferencesStorage';
 import {
   deleteToken,
   getUserSession,
   saveUserSession,
-} from '../utils/tokenStorage';
-import { validateCredentialsForm } from '../utils/validators';
+} from '@/utils/tokenStorage';
+import { validateCredentialsForm } from '@/utils/validators';
 
 const PAGE_SIZES: PageSizeOption[] = [10, 20, 30];
 
 export default function SettingsScreen() {
   const router = useRouter();
   const isDarkTheme = useThemeMode();
+  const { width, height } = useWindowDimensions();
+  const isWideLayout = width >= 820 || (width > height && width >= 680);
 
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
   const [session, setSession] = useState<UserSession | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -180,13 +183,13 @@ export default function SettingsScreen() {
     await resetLocalRecipeChanges();
     Alert.alert(
       'Catálogo restablecido',
-      'Se han restaurado las 30 recetas originales del servidor.'
+      'Se han restaurado las 30 recetas originales del catálogo.'
     );
   };
 
   const handleLogout = async () => {
     await deleteToken();
-    router.replace('/');
+    router.replace('/(auth)/login');
   };
 
   const isDark = isDarkTheme || settings.themeMode === 'dark';
@@ -208,222 +211,253 @@ export default function SettingsScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[
+          styles.container,
+          isWideLayout && styles.containerWide,
+        ]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={[styles.card, isDark && styles.cardDark]}>
-          <Text style={[styles.sectionTitle, isDark && styles.textDark]}>
-            Preferencias de Visualización y Catálogo
-          </Text>
-
-          <Text style={[styles.label, isDark && styles.textDark]}>
-            Recetas por página por defecto:
-          </Text>
-          <View style={styles.optionsRow}>
-            {PAGE_SIZES.map((size) => {
-              const selected = settings.itemsPerPage === size;
-              return (
-                <Pressable
-                  key={size}
-                  onPress={() => handleUpdateSetting({ itemsPerPage: size })}
-                  style={[
-                    styles.optionButton,
-                    isDark && styles.optionButtonDark,
-                    selected && styles.optionButtonSelected,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.optionText,
-                      isDark && styles.subTextDark,
-                      selected && styles.optionTextSelected,
-                    ]}
-                  >
-                    {size} recetas
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <Text style={[styles.label, isDark && styles.textDark]}>
-            Categoría inicial predeterminada:
-          </Text>
-          <View style={styles.optionsRow}>
-            {RECIPE_CATEGORIES.map((category: RecipeCategory) => {
-              const selected = settings.defaultCategory === category;
-              return (
-                <Pressable
-                  key={category}
-                  onPress={() =>
-                    handleUpdateSetting({ defaultCategory: category })
-                  }
-                  style={[
-                    styles.optionButton,
-                    isDark && styles.optionButtonDark,
-                    selected && styles.optionButtonSelected,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.optionText,
-                      isDark && styles.subTextDark,
-                      selected && styles.optionTextSelected,
-                    ]}
-                  >
-                    {category}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <Text style={[styles.label, isDark && styles.textDark]}>
-            Tema de la interfaz:
-          </Text>
-          <View style={styles.optionsRow}>
-            <Pressable
-              onPress={() => handleUpdateSetting({ themeMode: 'light' })}
-              style={[
-                styles.optionButton,
-                isDark && styles.optionButtonDark,
-                settings.themeMode === 'light' && styles.optionButtonSelected,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.optionText,
-                  isDark && styles.subTextDark,
-                  settings.themeMode === 'light' && styles.optionTextSelected,
-                ]}
-              >
-                ☀️ Claro
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => handleUpdateSetting({ themeMode: 'dark' })}
-              style={[
-                styles.optionButton,
-                isDark && styles.optionButtonDark,
-                settings.themeMode === 'dark' && styles.optionButtonSelected,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.optionText,
-                  isDark && styles.subTextDark,
-                  settings.themeMode === 'dark' && styles.optionTextSelected,
-                ]}
-              >
-                🌙 Oscuro
-              </Text>
-            </Pressable>
-          </View>
-
-          <View style={[styles.switchRow, isDark && styles.switchRowDark]}>
-            <View style={styles.switchLabelBox}>
-              <Text style={[styles.label, isDark && styles.textDark]}>
-                Modo de tarjetas compactas
-              </Text>
-              <Text style={[styles.helperText, isDark && styles.subTextDark]}>
-                Reduce la altura de las imágenes para ver más recetas en pantalla.
-              </Text>
-            </View>
-            <Switch
-              value={settings.compactCards}
-              onValueChange={(value) =>
-                handleUpdateSetting({ compactCards: value })
-              }
-              trackColor={{ false: isDark ? '#382E2B' : '#CCCCCC', true: '#C0392B' }}
-            />
-          </View>
-        </View>
-
-        <View style={[styles.card, isDark && styles.cardDark]}>
-          <Text style={[styles.sectionTitle, isDark && styles.textDark]}>
-            Seguridad y Actualización de Credenciales
-          </Text>
-          <Text style={[styles.helperText, isDark && styles.subTextDark]}>
-            Cuenta activa: {session?.email || 'Usuario autenticado'} (ID:{' '}
-            {session?.id ?? '-'})
-          </Text>
-
-          {credentialsError && (
-            <View
-              style={[styles.errorBanner, isDark && styles.errorBannerDark]}
-            >
-              <Text style={[styles.errorText, isDark && styles.errorTextDark]}>
-                {credentialsError}
-              </Text>
-            </View>
-          )}
-          {credentialsMessage && (
-            <View
-              style={[
-                styles.successBanner,
-                isDark && styles.successBannerDark,
-              ]}
-            >
-              <Text
-                style={[styles.successText, isDark && styles.successTextDark]}
-              >
-                {credentialsMessage}
-              </Text>
-            </View>
-          )}
-
-          <Text style={[styles.label, isDark && styles.textDark]}>
-            Contraseña actual *
-          </Text>
-          <TextInput
-            style={[styles.input, isDark && styles.inputDark]}
-            placeholder="Ingresa tu contraseña actual"
-            placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
-            secureTextEntry
-            value={currentPassword}
-            onChangeText={setCurrentPassword}
-          />
-
-          <Text style={[styles.label, isDark && styles.textDark]}>
-            Nuevo correo electrónico *
-          </Text>
-          <TextInput
-            style={[styles.input, isDark && styles.inputDark]}
-            placeholder="nuevo@correo.com"
-            placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={newEmail}
-            onChangeText={setNewEmail}
-          />
-
-          <Text style={[styles.label, isDark && styles.textDark]}>
-            Nueva contraseña *
-          </Text>
-          <TextInput
-            style={[styles.input, isDark && styles.inputDark]}
-            placeholder="Mínimo 4 caracteres"
-            placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
-            secureTextEntry
-            value={newPassword}
-            onChangeText={setNewPassword}
-          />
-
-          <Pressable
-            onPress={handleUpdateCredentials}
-            disabled={updatingCredentials}
+        <View style={isWideLayout ? styles.wideGrid : undefined}>
+          <View
             style={[
-              styles.primaryButton,
-              updatingCredentials && styles.buttonDisabled,
+              styles.card,
+              isDark && styles.cardDark,
+              isWideLayout && styles.cardHalf,
             ]}
           >
-            {updatingCredentials ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.buttonText}>Actualizar credenciales</Text>
+            <Text style={[styles.sectionTitle, isDark && styles.textDark]}>
+              Preferencias de Visualización y Catálogo
+            </Text>
+
+            <Text style={[styles.label, isDark && styles.textDark]}>
+              Recetas por página por defecto:
+            </Text>
+            <View style={styles.optionsRow}>
+              {PAGE_SIZES.map((size) => {
+                const selected = settings.itemsPerPage === size;
+                return (
+                  <Pressable
+                    key={size}
+                    onPress={() => handleUpdateSetting({ itemsPerPage: size })}
+                    style={[
+                      styles.optionButton,
+                      isDark && styles.optionButtonDark,
+                      selected && styles.optionButtonSelected,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.optionText,
+                        isDark && styles.subTextDark,
+                        selected && styles.optionTextSelected,
+                      ]}
+                    >
+                      {size} recetas
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.label, isDark && styles.textDark]}>
+              Categoría inicial predeterminada:
+            </Text>
+            <View style={styles.optionsRow}>
+              {RECIPE_CATEGORIES.map((category: RecipeCategory) => {
+                const selected = settings.defaultCategory === category;
+                return (
+                  <Pressable
+                    key={category}
+                    onPress={() =>
+                      handleUpdateSetting({ defaultCategory: category })
+                    }
+                    style={[
+                      styles.optionButton,
+                      isDark && styles.optionButtonDark,
+                      selected && styles.optionButtonSelected,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.optionText,
+                        isDark && styles.subTextDark,
+                        selected && styles.optionTextSelected,
+                      ]}
+                    >
+                      {category}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.label, isDark && styles.textDark]}>
+              Tema de la interfaz:
+            </Text>
+            <View style={styles.optionsRow}>
+              <Pressable
+                onPress={() => handleUpdateSetting({ themeMode: 'light' })}
+                style={[
+                  styles.optionButton,
+                  isDark && styles.optionButtonDark,
+                  settings.themeMode === 'light' && styles.optionButtonSelected,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.optionText,
+                    isDark && styles.subTextDark,
+                    settings.themeMode === 'light' && styles.optionTextSelected,
+                  ]}
+                >
+                  ☀️ Claro
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleUpdateSetting({ themeMode: 'dark' })}
+                style={[
+                  styles.optionButton,
+                  isDark && styles.optionButtonDark,
+                  settings.themeMode === 'dark' && styles.optionButtonSelected,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.optionText,
+                    isDark && styles.subTextDark,
+                    settings.themeMode === 'dark' && styles.optionTextSelected,
+                  ]}
+                >
+                  🌙 Oscuro
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={[styles.switchRow, isDark && styles.switchRowDark]}>
+              <View style={styles.switchLabelBox}>
+                <Text style={[styles.label, isDark && styles.textDark]}>
+                  Modo de tarjetas compactas
+                </Text>
+                <Text style={[styles.helperText, isDark && styles.subTextDark]}>
+                  Reduce la altura de las imágenes para ver más recetas en
+                  pantalla.
+                </Text>
+              </View>
+              <Switch
+                value={settings.compactCards}
+                onValueChange={(value) =>
+                  handleUpdateSetting({ compactCards: value })
+                }
+                trackColor={{
+                  false: isDark ? '#382E2B' : '#CCCCCC',
+                  true: '#C0392B',
+                }}
+              />
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.card,
+              isDark && styles.cardDark,
+              isWideLayout && styles.cardHalf,
+            ]}
+          >
+            <Text style={[styles.sectionTitle, isDark && styles.textDark]}>
+              Seguridad y Actualización de Credenciales
+            </Text>
+            <Text style={[styles.helperText, isDark && styles.subTextDark]}>
+              Cuenta activa: {session?.email || 'Usuario autenticado'} (ID:{' '}
+              {session?.id ?? '-'})
+            </Text>
+
+            {credentialsError && (
+              <View
+                style={[styles.errorBanner, isDark && styles.errorBannerDark]}
+              >
+                <Text
+                  style={[styles.errorText, isDark && styles.errorTextDark]}
+                >
+                  {credentialsError}
+                </Text>
+              </View>
             )}
-          </Pressable>
+            {credentialsMessage && (
+              <View
+                style={[
+                  styles.successBanner,
+                  isDark && styles.successBannerDark,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.successText,
+                    isDark && styles.successTextDark,
+                  ]}
+                >
+                  {credentialsMessage}
+                </Text>
+              </View>
+            )}
+
+            <Text style={[styles.label, isDark && styles.textDark]}>
+              Contraseña actual *
+            </Text>
+            <TextInput
+              style={[styles.input, isDark && styles.inputDark]}
+              placeholder="Ingresa tu contraseña actual"
+              placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
+              secureTextEntry
+              autoCapitalize="none"
+              editable={!updatingCredentials}
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+            />
+
+            <Text style={[styles.label, isDark && styles.textDark]}>
+              Nuevo correo electrónico *
+            </Text>
+            <TextInput
+              style={[styles.input, isDark && styles.inputDark]}
+              placeholder="nuevo@correo.com"
+              placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={!updatingCredentials}
+              value={newEmail}
+              onChangeText={setNewEmail}
+            />
+
+            <Text style={[styles.label, isDark && styles.textDark]}>
+              Nueva contraseña *
+            </Text>
+            <TextInput
+              style={[styles.input, isDark && styles.inputDark]}
+              placeholder="Mínimo 4 caracteres"
+              placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
+              secureTextEntry
+              autoCapitalize="none"
+              editable={!updatingCredentials}
+              value={newPassword}
+              onChangeText={setNewPassword}
+            />
+
+            <Pressable
+              onPress={handleUpdateCredentials}
+              disabled={updatingCredentials}
+              style={[
+                styles.primaryButton,
+                updatingCredentials && styles.buttonDisabled,
+              ]}
+            >
+              {updatingCredentials ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.buttonText}>Actualizar credenciales</Text>
+              )}
+            </Pressable>
+          </View>
         </View>
 
         <View style={[styles.card, isDark && styles.cardDark]}>
@@ -440,7 +474,7 @@ export default function SettingsScreen() {
             </Text>
           </Pressable>
 
-          <Pressable onPress={handleLogout} style={styles.dangerButton}>
+          <Pressable onPress={() => handleLogout()} style={styles.dangerButton}>
             <Text style={styles.buttonText}>Cerrar sesión</Text>
           </Pressable>
         </View>
@@ -462,6 +496,17 @@ const styles = StyleSheet.create({
     maxWidth: 720,
     width: '100%',
     alignSelf: 'center',
+  },
+  containerWide: {
+    maxWidth: 1120,
+  },
+  wideGrid: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 16,
+  },
+  cardHalf: {
+    flex: 1,
   },
   centered: {
     flex: 1,

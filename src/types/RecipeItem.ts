@@ -2,6 +2,7 @@ export type RecipeCategory =
   | 'Todas'
   | 'Mexicanas'
   | 'Italianas'
+  | 'Orientales'
   | 'Estadounidenses'
   | 'Saludables'
   | 'Postres';
@@ -17,6 +18,7 @@ export const RECIPE_CATEGORIES: RecipeCategory[] = [
   'Todas',
   'Mexicanas',
   'Italianas',
+  'Orientales',
   'Estadounidenses',
   'Saludables',
   'Postres',
@@ -25,6 +27,7 @@ export const RECIPE_CATEGORIES: RecipeCategory[] = [
 export const VALID_RECIPE_CATEGORIES: string[] = [
   'Mexicanas',
   'Italianas',
+  'Orientales',
   'Estadounidenses',
   'Saludables',
   'Postres',

@@ -11,19 +11,23 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
-import { registerUser } from '../utils/auth';
-import { useThemeMode } from '../utils/preferencesStorage';
-import { validateAuthForm } from '../utils/validators';
+import { registerUser } from '@/utils/auth';
+import { useThemeMode } from '@/utils/preferencesStorage';
+import { validateAuthForm } from '@/utils/validators';
 
 export default function RegisterScreen() {
   const router = useRouter();
   const isDark = useThemeMode();
+  const { width, height } = useWindowDimensions();
+  const isLandscapeCompact = width > height && height < 520;
+  const isTwoColFields = width >= 620;
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleRegister = async () => {
@@ -41,20 +45,20 @@ export default function RegisterScreen() {
     }
 
     try {
-      setSubmitting(true);
+      setLoading(true);
       await registerUser(email, password);
       Alert.alert(
         'Cuenta creada',
         'Tu cuenta ha sido registrada exitosamente. Ahora puedes iniciar sesión.'
       );
-      router.replace('/');
+      router.replace('/(auth)/login');
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : 'No se pudo completar el registro.';
       setErrorMessage(msg);
       Alert.alert('Error de registro', msg);
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
@@ -64,10 +68,19 @@ export default function RegisterScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={styles.scrollContainer}
+        contentContainerStyle={[
+          styles.scrollContainer,
+          isLandscapeCompact && styles.scrollContainerLandscape,
+        ]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={[styles.card, isDark && styles.cardDark]}>
+        <View
+          style={[
+            styles.card,
+            isDark && styles.cardDark,
+            isTwoColFields && styles.cardWide,
+          ]}
+        >
           <Text style={[styles.title, isDark && styles.textDark]}>
             Crear nueva cuenta
           </Text>
@@ -95,41 +108,52 @@ export default function RegisterScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
+            editable={!loading}
             value={email}
             onChangeText={setEmail}
           />
 
-          <Text style={[styles.label, isDark && styles.textDark]}>
-            Contraseña
-          </Text>
-          <TextInput
-            style={[styles.input, isDark && styles.inputDark]}
-            placeholder="Mínimo 4 caracteres"
-            placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
+          <View style={isTwoColFields ? styles.twoColRow : undefined}>
+            <View style={isTwoColFields ? styles.col : undefined}>
+              <Text style={[styles.label, isDark && styles.textDark]}>
+                Contraseña
+              </Text>
+              <TextInput
+                style={[styles.input, isDark && styles.inputDark]}
+                placeholder="Mínimo 4 caracteres"
+                placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
+                secureTextEntry
+                autoCapitalize="none"
+                editable={!loading}
+                value={password}
+                onChangeText={setPassword}
+              />
+            </View>
 
-          <Text style={[styles.label, isDark && styles.textDark]}>
-            Confirmar contraseña
-          </Text>
-          <TextInput
-            style={[styles.input, isDark && styles.inputDark]}
-            placeholder="Repite tu contraseña"
-            placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
-            secureTextEntry
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            onSubmitEditing={handleRegister}
-          />
+            <View style={isTwoColFields ? styles.col : undefined}>
+              <Text style={[styles.label, isDark && styles.textDark]}>
+                Confirmar contraseña
+              </Text>
+              <TextInput
+                style={[styles.input, isDark && styles.inputDark]}
+                placeholder="Repite tu contraseña"
+                placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
+                secureTextEntry
+                autoCapitalize="none"
+                editable={!loading}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                onSubmitEditing={handleRegister}
+              />
+            </View>
+          </View>
 
           <Pressable
             onPress={handleRegister}
-            disabled={submitting}
-            style={[styles.primaryButton, submitting && styles.buttonDisabled]}
+            disabled={loading}
+            style={[styles.primaryButton, loading && styles.buttonDisabled]}
           >
-            {submitting ? (
+            {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
               <Text style={styles.buttonText}>Registrarme</Text>
@@ -137,7 +161,7 @@ export default function RegisterScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() => router.replace('/')}
+            onPress={() => router.replace('/(auth)/login')}
             style={styles.linkButton}
           >
             <Text style={[styles.linkText, isDark && styles.linkTextDark]}>
@@ -162,6 +186,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     padding: 20,
+  },
+  scrollContainerLandscape: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
   },
   card: {
     backgroundColor: '#FFFFFF',
@@ -188,6 +216,16 @@ const styles = StyleSheet.create({
   cardDark: {
     backgroundColor: '#241D1B',
     borderColor: '#382E2B',
+  },
+  cardWide: {
+    maxWidth: 640,
+  },
+  twoColRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  col: {
+    flex: 1,
   },
   title: {
     fontSize: 22,

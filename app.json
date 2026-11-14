@@ -3,21 +3,14 @@
     "name": "GastroLab",
     "slug": "gastrolab",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "scheme": "gastrolab",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
-      "infoPlist": {
-        "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true
-        }
-      }
+      "supportsTablet": true
     },
-    "android": {
-      "usesCleartextTraffic": true
-    },
+    "android": {},
     "web": {
       "bundler": "metro",
       "output": "single"
@@ -30,7 +23,8 @@
         {
           "photosPermission": "GastroLab necesita acceso a tus fotos para seleccionar imágenes de tus recetas."
         }
-      ]
+      ],
+      "expo-splash-screen"
     ],
     "experiments": {
       "typedRoutes": false

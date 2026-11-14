@@ -1,27 +1,27 @@
 # 03 — Modelos de Datos, Adaptadores de Tipos y Reglas de Validación
 
-## 1. Esquema de Datos de `gastroRecipe` (MySQL)
+## 1. Esquema de Datos del Catálogo Local (`src/data/recipesData.ts`)
 
-Cada registro devuelto por el backend en `http://apifake.mywebcommunity.org/recipe.php` tiene la siguiente forma JSON:
+Cada uno de los 30 registros embebidos en `INITIAL_RECIPES_DATA` tiene la siguiente estructura:
 
 ```json
 {
-  "id": "1",
+  "id": 1,
   "title": "Un manjar de italia: la pizza",
   "description": "Descubre algo mas sobre este manjar!",
   "imageURL": "https://assets.tmecosys.com/image/upload/...",
   "preparetime": "01:00:00",
-  "likerate": "90",
+  "likerate": 90,
   "category": "Italianas",
   "difficulty": "Facil"
 }
 ```
 
-### Valores del Dominio en la Base de Datos
-- **Categorías (`category`):** `"Mexicanas"`, `"Italianas"`, `"Estadounidenses"`, `"Saludables"`, `"Postres"`.
+### Valores del Dominio en el Catálogo
+- **Categorías (`category`):** `"Mexicanas"`, `"Italianas"`, `"Estadounidenses"`, `"Orientales"`, `"Saludables"`, `"Postres"`.
 - **Dificultades (`difficulty`):** `"Muy facil"`, `"Facil"`, `"Medio"`, `"Dificil"`.
 - **Tiempo de preparación (`preparetime`):** Cadena en formato `HH:MM:SS` (ej. `"00:20:00"`, `"01:00:00"`, `"01:30:00"`).
-- **Porcentaje de aprobación (`likerate`):** Valor entero entre `0` y `100` (devuelto como `string` en la consulta general `GET /recipe.php` y como `number` en `GET /recipe.php?id=1`).
+- **Porcentaje de aprobación (`likerate`):** Valor entero entre `0` y `100`.
 
 ---
 
@@ -35,6 +35,7 @@ export type RecipeCategory =
   | 'Mexicanas'
   | 'Italianas'
   | 'Estadounidenses'
+  | 'Orientales'
   | 'Saludables'
   | 'Postres';
 
@@ -45,7 +46,7 @@ export type RecipeDifficulty =
   | 'Medio'
   | 'Dificil';
 
-// Objeto crudo recibido desde el endpoint PHP
+// Objeto de datos crudo del catálogo base
 export interface RawRecipeDto {
   id: number | string;
   title: string;
@@ -64,10 +65,10 @@ export interface RecipeItem {
   title: string;
   description: string;
   image: string;          // URI de imagen lista para <Image source={{ uri: item.image }} />
-  imageURL: string;       // Espejo de image para envíos al backend PHP
+  imageURL: string;       // URL de imagen original o seleccionada
   prepareTime: string;    // Formato HH:MM:SS (ej. "00:45:00")
   likeRate: number;       // Siempre tipo number entre 0 y 100
-  category: string;       // Ej. "Mexicanas", "Italianas", etc.
+  category: string;       // Ej. "Mexicanas", "Italianas", "Orientales", etc.
   difficulty: string;     // Ej. "Muy facil", "Facil", "Medio", "Dificil"
 }
 
@@ -175,7 +176,7 @@ export const adaptRecipeDtoToItem = (raw: RawRecipeDto): RecipeItem => {
 
 ## 4. Especificación del Motor de Validaciones (`src/utils/validators.ts`)
 
-Todas las entradas del usuario deben validarse antes de ejecutar cualquier petición HTTP, verificando tanto **campos de texto obligatorios** como **tipos de datos y rangos**.
+Todas las entradas del usuario deben validarse antes de guardar cambios o iniciar sesión, verificando tanto **campos de texto obligatorios** como **tipos de datos y rangos**.
 
 ### 4.1 Validaciones de Login y Registro (`validateAuthForm`)
 - **Correo electrónico (`email`):**
@@ -203,16 +204,7 @@ En `src/app/form.tsx`, antes de guardar se deben validar los siguientes campos y
    - Obligatorio y con formato `HH:MM:SS` (`/^\d{2}:[0-5]\d:[0-5]\d$/`).
    - Mensaje: `"El tiempo de preparación debe tener el formato HH:MM:SS (ejemplo: 00:45:00)."`.
 5. **Calificación / Porcentaje de aprobación (`likeRate`):**
-   - Verificación estricta de tipo numérico entero:
-     ```typescript
-     const parsedRate = Number(likeRateInput);
-     const isValidRate =
-       likeRateInput.trim() !== '' &&
-       !Number.isNaN(parsedRate) &&
-       Number.isInteger(parsedRate) &&
-       parsedRate >= 0 &&
-       parsedRate <= 100;
-     ```
+   - Verificación estricta de tipo numérico entero entre `0` y `100`.
    - Mensaje: `"La calificación debe ser un número entero entre 0 y 100."`.
 6. **Categoría (`category`) y Dificultad (`difficulty`):**
    - Obligatorios; deben coincidir con las opciones válidas del catálogo.
