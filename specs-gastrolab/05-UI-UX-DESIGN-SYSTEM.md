@@ -1,8 +1,12 @@
 # 05 — Sistema de Diseño UI/UX ("GastroLab Culinary Design")
 
-## 1. Filosofía Visual y Estructura de Estilos
+## 1. Filosofía Visual, Responsividad y Orientación Libre
 
 El diseño de **GastroLab** debe ser moderno, cálido, gastronómico, intuitivo y sumamente fácil de leer, construyendo todos los estilos mediante `StyleSheet.create({...})` al final de cada archivo de componente o pantalla.
+
+- **Orientación Desbloqueada (`portrait` y `landscape`):**
+  - En `app.json` se configura `"orientation": "default"` y en `_layout.tsx` se configura `<Stack screenOptions={{ orientation: 'default' }}>`.
+  - Todas las pantallas utilizan `useWindowDimensions()` para adaptarse dinámicamente a teléfonos pequeños, teléfonos en horizontal (landscape), tablets y pantallas de escritorio (`numColumns` dinámico en `FlatList` y vista lado a lado en `details.tsx`).
 
 ---
 
@@ -56,7 +60,7 @@ La tarjeta debe presentar una jerarquía visual clara y atractiva:
   ```
 
 ### 3.2 Sombras Multiplataforma Sin Warnings en Web
-En React Native Web (Expo SDK 57), las propiedades `shadow*` directas muestran advertencia de deprecación en consola (`"shadow*" style props are deprecated. Use "boxShadow"`). Para lograr sombras limpias sin warnings en consola, definir las sombras de las tarjetas con `Platform.select`:
+En React Native Web (Expo SDK 58), las propiedades `shadow*` directas muestran advertencia de deprecación en consola (`"shadow*" style props are deprecated. Use "boxShadow"`). Para lograr sombras limpias sin warnings en consola, definir las sombras de las tarjetas con `Platform.select`:
 
 ```typescript
 ...Platform.select({

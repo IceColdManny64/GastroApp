@@ -113,8 +113,10 @@ const styles = StyleSheet.create({
   },
   pageSizeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
     marginBottom: 10,
     paddingBottom: 10,
     borderBottomWidth: 1,
@@ -167,8 +169,10 @@ const styles = StyleSheet.create({
   },
   navRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
   },
   navButton: {
     backgroundColor: '#753333',

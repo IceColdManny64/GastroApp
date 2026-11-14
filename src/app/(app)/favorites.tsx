@@ -7,27 +7,31 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
-import Card from '../components/ui/card';
-import { getRecipes } from '../services/recipes';
-import { UserSettings } from '../types/Auth';
-import { RecipeItem } from '../types/RecipeItem';
+import Card from '@/components/ui/card';
+import { getRecipes } from '@/services/recipes';
+import { UserSettings } from '@/types/Auth';
+import { RecipeItem } from '@/types/RecipeItem';
 import {
   DEFAULT_USER_SETTINGS,
   getFavorites,
   getUserSettings,
   toggleFavorite,
   useThemeMode,
-} from '../utils/preferencesStorage';
+} from '@/utils/preferencesStorage';
 
 export default function FavoritesScreen() {
   const router = useRouter();
   const isDarkTheme = useThemeMode();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  const numColumns = width >= 980 ? 3 : width >= 620 || isLandscape ? 2 : 1;
 
   const [recipes, setRecipes] = useState<RecipeItem[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadFavoritesData = useCallback(async () => {
@@ -99,8 +103,12 @@ export default function FavoritesScreen() {
   return (
     <View style={[styles.container, isDark && styles.containerDark]}>
       <FlatList
+        key={`favorites-grid-${numColumns}`}
+        numColumns={numColumns}
+        columnWrapperStyle={numColumns > 1 ? styles.columnWrapper : undefined}
         data={favoriteRecipes}
         keyExtractor={(item) => String(item.id)}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <View style={styles.headerBox}>
@@ -114,25 +122,30 @@ export default function FavoritesScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <Card
-            title={item.title}
-            image={item.image}
-            description={item.description}
-            category={item.category}
-            difficulty={item.difficulty}
-            prepareTime={item.prepareTime}
-            likeRate={item.likeRate}
-            isFavorite={true}
-            compact={settings.compactCards}
-            darkMode={isDark}
-            onToggleFavorite={() => handleToggleFavorite(item.id)}
-            onPress={() =>
-              router.push({
-                pathname: '/details',
-                params: { id: String(item.id) },
-              })
-            }
-          />
+          <View style={numColumns > 1 ? styles.gridItem : styles.singleItem}>
+            <Card
+              title={item.title}
+              image={item.image}
+              description={item.description}
+              category={item.category}
+              difficulty={item.difficulty}
+              prepareTime={item.prepareTime}
+              likeRate={item.likeRate}
+              isFavorite={true}
+              compact={settings.compactCards || (isLandscape && height < 480)}
+              darkMode={isDark}
+              onToggleFavorite={() => handleToggleFavorite(item.id)}
+              onPress={() =>
+                router.push({
+                  pathname: '/details',
+                  params: {
+                    id: String(item.id),
+                    item: JSON.stringify(item),
+                  },
+                })
+              }
+            />
+          </View>
         )}
         ListEmptyComponent={
           <View style={[styles.emptyState, isDark && styles.emptyStateDark]}>
@@ -167,9 +180,18 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    maxWidth: 880,
+    maxWidth: 1200,
     width: '100%',
     alignSelf: 'center',
+  },
+  columnWrapper: {
+    gap: 16,
+  },
+  gridItem: {
+    flex: 1,
+  },
+  singleItem: {
+    width: '100%',
   },
   centered: {
     flex: 1,

@@ -1,52 +1,51 @@
-import { API_BASE_URL } from './api';
-import { LoginSuccessResponse, RegisterResponse } from '../types/Auth';
+import { getLocalUsers, saveLocalUsers } from './preferencesStorage';
 import { saveUserSession } from './tokenStorage';
 
-const LOGIN_URL = `${API_BASE_URL}/login.php`;
-const REGISTER_URL = `${API_BASE_URL}/register.php`;
-
 export async function login(email: string, password: string): Promise<string> {
-  console.log(`[auth.ts] Intentando login para: ${email} en URL: ${LOGIN_URL}`);
+  const normalizedEmail = email.trim().toLowerCase();
+  console.log(`[auth.ts] Intentando login local para: ${normalizedEmail}`);
 
-  const response = await fetch(LOGIN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-    body: JSON.stringify({ email: email.trim(), password }),
-  });
+  const users = await getLocalUsers();
+  const matchedUser = users.find(
+    (u) => u.email.toLowerCase() === normalizedEmail && u.password === password
+  );
 
-  const data: LoginSuccessResponse = await response.json();
-
-  if (!response.ok || data.login !== 'success' || !data.id) {
-    throw new Error(data.message || data.error || 'Correo o contraseña incorrectos');
+  if (!matchedUser) {
+    throw new Error('Correo o contraseña incorrectos');
   }
 
-  const token = `gastrolab-token-${data.id}-${Date.now()}`;
+  const token = `gastrolab-token-${matchedUser.id}-${Date.now()}`;
   await saveUserSession({
-    id: Number(data.id),
-    email: data.email || email.trim(),
+    id: matchedUser.id,
+    email: matchedUser.email,
     token,
   });
 
-  console.log('[auth.ts] Login exitoso, token generado para ID:', data.id);
+  console.log('[auth.ts] Login exitoso para ID:', matchedUser.id);
   return token;
 }
 
 export async function registerUser(email: string, password: string): Promise<void> {
-  console.log(`[auth.ts] Registrando nuevo usuario: ${email}`);
+  const cleanEmail = email.trim();
+  const normalizedEmail = cleanEmail.toLowerCase();
+  console.log(`[auth.ts] Registrando nuevo usuario local: ${cleanEmail}`);
 
-  const response = await fetch(REGISTER_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-    body: JSON.stringify({ email: email.trim(), password }),
-  });
+  const users = await getLocalUsers();
+  const alreadyExists = users.some((u) => u.email.toLowerCase() === normalizedEmail);
 
-  const data: RegisterResponse = await response.json();
-
-  if (response.status === 409) {
+  if (alreadyExists) {
     throw new Error('Este correo electrónico ya está registrado.');
   }
 
-  if (!response.ok || data.store !== 'success') {
-    throw new Error(data.error || 'No se pudo completar el registro.');
-  }
+  const nextId =
+    users.reduce((maxId, item) => Math.max(maxId, Number(item.id) || 0), 0) + 1;
+
+  users.push({
+    id: nextId,
+    email: cleanEmail,
+    password,
+  });
+
+  await saveLocalUsers(users);
+  console.log('[auth.ts] Usuario registrado con ID:', nextId);
 }

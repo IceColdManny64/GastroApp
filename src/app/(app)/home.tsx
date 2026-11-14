@@ -7,19 +7,20 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
-import Card from '../components/ui/card';
-import PaginationBar from '../components/ui/paginationBar';
-import SearchFilterBar from '../components/ui/searchFilterBar';
-import { getRecipes } from '../services/recipes';
-import { PageSizeOption, UserSettings } from '../types/Auth';
+import Card from '@/components/ui/card';
+import PaginationBar from '@/components/ui/paginationBar';
+import SearchFilterBar from '@/components/ui/searchFilterBar';
+import { getRecipes } from '@/services/recipes';
+import { PageSizeOption, UserSettings } from '@/types/Auth';
 import {
   RecipeCategory,
   RecipeDifficulty,
   RecipeFilterState,
   RecipeItem,
   SortOption,
-} from '../types/RecipeItem';
+} from '@/types/RecipeItem';
 import {
   DEFAULT_USER_SETTINGS,
   getFavorites,
@@ -27,15 +28,18 @@ import {
   saveUserSettings,
   toggleFavorite,
   useThemeMode,
-} from '../utils/preferencesStorage';
-import { deleteToken, getToken } from '../utils/tokenStorage';
+} from '@/utils/preferencesStorage';
+import { deleteToken, getToken } from '@/utils/tokenStorage';
 
 export default function HomeScreen() {
   const router = useRouter();
   const isDarkTheme = useThemeMode();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  const numColumns = width >= 980 ? 3 : width >= 620 || isLandscape ? 2 : 1;
 
   const [recipes, setRecipes] = useState<RecipeItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -57,14 +61,14 @@ export default function HomeScreen() {
 
   const handleLogout = async () => {
     await deleteToken();
-    router.replace('/');
+    router.replace('/(auth)/login');
   };
 
   const fetchRecipes = useCallback(async () => {
     try {
       const token = await getToken();
       if (!token) {
-        router.replace('/');
+        router.replace('/(auth)/login');
         return;
       }
 
@@ -75,7 +79,6 @@ export default function HomeScreen() {
         getUserSettings(),
       ]);
 
-      console.log('[home.tsx] Data recibida:', data?.length);
       setRecipes(data);
       setFavoriteIds(favs);
       setUserSettings(settings);
@@ -115,7 +118,7 @@ export default function HomeScreen() {
       setCurrentPage(1);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : 'Error al buscar en el servidor'
+        err instanceof Error ? err.message : 'Error al buscar en el catálogo'
       );
     } finally {
       setLoading(false);
@@ -228,8 +231,12 @@ export default function HomeScreen() {
   return (
     <View style={[styles.container, isDark && styles.containerDark]}>
       <FlatList
+        key={`recipes-grid-${numColumns}`}
+        numColumns={numColumns}
+        columnWrapperStyle={numColumns > 1 ? styles.columnWrapper : undefined}
         data={paginatedRecipes}
         keyExtractor={(item) => String(item.id)}
+        showsVerticalScrollIndicator={false}
         refreshing={refreshing}
         onRefresh={onRefresh}
         contentContainerStyle={styles.listContent}
@@ -260,7 +267,7 @@ export default function HomeScreen() {
               </Pressable>
 
               <Pressable
-                onPress={handleLogout}
+                onPress={() => handleLogout()}
                 style={[styles.actionBtn, styles.dangerActionBtn]}
               >
                 <Text style={styles.actionBtnText}>Cerrar sesión</Text>
@@ -312,25 +319,32 @@ export default function HomeScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <Card
-            title={item.title}
-            image={item.image}
-            description={item.description}
-            category={item.category}
-            difficulty={item.difficulty}
-            prepareTime={item.prepareTime}
-            likeRate={item.likeRate}
-            isFavorite={favoriteIds.includes(item.id)}
-            compact={userSettings.compactCards}
-            darkMode={isDark}
-            onToggleFavorite={() => handleToggleFavorite(item.id)}
-            onPress={() =>
-              router.push({
-                pathname: '/details',
-                params: { id: String(item.id) },
-              })
-            }
-          />
+          <View style={numColumns > 1 ? styles.gridItem : styles.singleItem}>
+            <Card
+              title={item.title}
+              image={item.image}
+              description={item.description}
+              category={item.category}
+              difficulty={item.difficulty}
+              prepareTime={item.prepareTime}
+              likeRate={item.likeRate}
+              isFavorite={favoriteIds.includes(item.id)}
+              compact={
+                userSettings.compactCards || (isLandscape && height < 480)
+              }
+              darkMode={isDark}
+              onToggleFavorite={() => handleToggleFavorite(item.id)}
+              onPress={() =>
+                router.push({
+                  pathname: '/details',
+                  params: {
+                    id: String(item.id),
+                    item: JSON.stringify(item),
+                  },
+                })
+              }
+            />
+          </View>
         )}
         ListEmptyComponent={
           <View style={[styles.emptyBox, isDark && styles.emptyBoxDark]}>
@@ -380,9 +394,18 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    maxWidth: 880,
+    maxWidth: 1200,
     width: '100%',
     alignSelf: 'center',
+  },
+  columnWrapper: {
+    gap: 16,
+  },
+  gridItem: {
+    flex: 1,
+  },
+  singleItem: {
+    width: '100%',
   },
   centered: {
     flex: 1,

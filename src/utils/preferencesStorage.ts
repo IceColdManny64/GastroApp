@@ -1,14 +1,29 @@
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
-import { UserSettings } from '../types/Auth';
-import { RecipeItem } from '../types/RecipeItem';
+import { UserSettings } from '@/types/Auth';
+import { RecipeItem } from '@/types/RecipeItem';
 import { getUserSession } from './tokenStorage';
 
 const FAVORITES_PREFIX = 'gastrolab_favorites_';
 const SETTINGS_PREFIX = 'gastrolab_settings_';
 const GLOBAL_THEME_KEY = 'gastrolab_global_theme';
 const CRUD_OVERLAY_KEY = 'gastrolab_crud_overlay';
+const USERS_STORAGE_KEY = 'gastrolab_local_users';
+
+export interface LocalUserRecord {
+  id: number;
+  email: string;
+  password: string;
+}
+
+const DEFAULT_LOCAL_USERS: LocalUserRecord[] = [
+  {
+    id: 1,
+    email: 'admin@gastrolab.com',
+    password: '1234',
+  },
+];
 
 export interface CrudOverlayState {
   createdRecipes: RecipeItem[];
@@ -28,6 +43,10 @@ let cachedThemeMode: 'light' | 'dark' = 'light';
 let themeInitialized = false;
 const themeListeners = new Set<(mode: 'light' | 'dark') => void>();
 
+function isWebStorageAvailable(): boolean {
+  return Platform.OS === 'web' && typeof localStorage !== 'undefined';
+}
+
 const notifyThemeListeners = (mode: 'light' | 'dark') => {
   cachedThemeMode = mode;
   themeInitialized = true;
@@ -40,15 +59,31 @@ const notifyThemeListeners = (mode: 'light' | 'dark') => {
   });
 };
 
-const readStorageItem = async (key: string): Promise<string | null> => {
+const CHUNK_SIZE = 1800;
+
+async function readStorageItem(key: string): Promise<string | null> {
   try {
-    if (Platform.OS === 'web') {
+    if (isWebStorageAvailable()) {
       const value = localStorage.getItem(key);
       if (value !== null) memoryCache[key] = value;
       return value;
     }
     if (memoryCache[key] !== undefined) {
       return memoryCache[key];
+    }
+    const chunkCountRaw = await SecureStore.getItemAsync(`${key}__chunks`);
+    if (chunkCountRaw) {
+      const count = Number(chunkCountRaw);
+      if (Number.isFinite(count) && count > 0) {
+        const parts: string[] = [];
+        for (let i = 0; i < count; i++) {
+          const part = await SecureStore.getItemAsync(`${key}__chunk_${i}`);
+          if (part !== null) parts.push(part);
+        }
+        const joined = parts.join('');
+        memoryCache[key] = joined;
+        return joined;
+      }
     }
     const value = await SecureStore.getItemAsync(key);
     if (value !== null) memoryCache[key] = value;
@@ -57,40 +92,58 @@ const readStorageItem = async (key: string): Promise<string | null> => {
     console.warn(`[preferencesStorage.ts] Fallback a memoria al leer ${key}:`, err);
     return memoryCache[key] ?? null;
   }
-};
+}
 
-const writeStorageItem = async (key: string, value: string): Promise<void> => {
+async function writeStorageItem(key: string, value: string): Promise<void> {
   memoryCache[key] = value;
   try {
-    if (Platform.OS === 'web') {
+    if (isWebStorageAvailable()) {
       localStorage.setItem(key, value);
-    } else if (value.length <= 1950) {
+      return;
+    }
+    if (value.length <= CHUNK_SIZE) {
+      await SecureStore.deleteItemAsync(`${key}__chunks`);
       await SecureStore.setItemAsync(key, value);
+    } else {
+      const chunks = Math.ceil(value.length / CHUNK_SIZE);
+      for (let i = 0; i < chunks; i++) {
+        const slice = value.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+        await SecureStore.setItemAsync(`${key}__chunk_${i}`, slice);
+      }
+      await SecureStore.setItemAsync(`${key}__chunks`, String(chunks));
     }
   } catch (err) {
     console.warn(`[preferencesStorage.ts] Fallback a memoria al guardar ${key}:`, err);
   }
-};
+}
 
-const removeStorageItem = async (key: string): Promise<void> => {
+async function removeStorageItem(key: string): Promise<void> {
   delete memoryCache[key];
   try {
-    if (Platform.OS === 'web') {
+    if (isWebStorageAvailable()) {
       localStorage.removeItem(key);
     } else {
+      const chunkCountRaw = await SecureStore.getItemAsync(`${key}__chunks`);
+      if (chunkCountRaw) {
+        const count = Number(chunkCountRaw);
+        for (let i = 0; i < count; i++) {
+          await SecureStore.deleteItemAsync(`${key}__chunk_${i}`);
+        }
+        await SecureStore.deleteItemAsync(`${key}__chunks`);
+      }
       await SecureStore.deleteItemAsync(key);
     }
   } catch (err) {
     console.warn(`[preferencesStorage.ts] Error eliminando ${key}:`, err);
   }
-};
+}
 
-const getUserKeySuffix = async (): Promise<string> => {
+async function getUserKeySuffix(): Promise<string> {
   const session = await getUserSession();
   return session?.id ? String(session.id) : 'guest';
-};
+}
 
-export const getFavorites = async (): Promise<number[]> => {
+export async function getFavorites(): Promise<number[]> {
   const suffix = await getUserKeySuffix();
   const raw = await readStorageItem(`${FAVORITES_PREFIX}${suffix}`);
   if (!raw) return [];
@@ -103,9 +156,9 @@ export const getFavorites = async (): Promise<number[]> => {
     console.warn('[preferencesStorage.ts] Error parseando favoritos:', err);
   }
   return [];
-};
+}
 
-export const toggleFavorite = async (recipeId: number): Promise<number[]> => {
+export async function toggleFavorite(recipeId: number): Promise<number[]> {
   const suffix = await getUserKeySuffix();
   const current = await getFavorites();
   const numericId = Number(recipeId);
@@ -116,9 +169,9 @@ export const toggleFavorite = async (recipeId: number): Promise<number[]> => {
 
   await writeStorageItem(`${FAVORITES_PREFIX}${suffix}`, JSON.stringify(updated));
   return updated;
-};
+}
 
-export const getUserSettings = async (): Promise<UserSettings> => {
+export async function getUserSettings(): Promise<UserSettings> {
   const suffix = await getUserKeySuffix();
   const [raw, globalTheme] = await Promise.all([
     readStorageItem(`${SETTINGS_PREFIX}${suffix}`),
@@ -162,9 +215,9 @@ export const getUserSettings = async (): Promise<UserSettings> => {
     console.warn('[preferencesStorage.ts] Error parseando settings:', err);
     return { ...DEFAULT_USER_SETTINGS, themeMode: fallbackTheme };
   }
-};
+}
 
-export const saveUserSettings = async (settings: UserSettings): Promise<UserSettings> => {
+export async function saveUserSettings(settings: UserSettings): Promise<UserSettings> {
   const suffix = await getUserKeySuffix();
   notifyThemeListeners(settings.themeMode);
   await Promise.all([
@@ -172,11 +225,11 @@ export const saveUserSettings = async (settings: UserSettings): Promise<UserSett
     writeStorageItem(GLOBAL_THEME_KEY, settings.themeMode),
   ]);
   return settings;
-};
+}
 
-export const useThemeMode = (): boolean => {
+export function useThemeMode(): boolean {
   const [mode, setMode] = useState<'light' | 'dark'>(() => {
-    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+    if (isWebStorageAvailable()) {
       const storedGlobal = localStorage.getItem(GLOBAL_THEME_KEY);
       if (storedGlobal === 'dark' || storedGlobal === 'light') {
         cachedThemeMode = storedGlobal;
@@ -204,9 +257,9 @@ export const useThemeMode = (): boolean => {
   }, []);
 
   return mode === 'dark';
-};
+}
 
-export const getCrudOverlay = async (): Promise<CrudOverlayState> => {
+export async function getCrudOverlay(): Promise<CrudOverlayState> {
   const raw = await readStorageItem(CRUD_OVERLAY_KEY);
   if (!raw) {
     return {
@@ -235,12 +288,37 @@ export const getCrudOverlay = async (): Promise<CrudOverlayState> => {
       deletedRecipeIds: [],
     };
   }
-};
+}
 
-export const saveCrudOverlay = async (overlay: CrudOverlayState): Promise<void> => {
+export async function saveCrudOverlay(overlay: CrudOverlayState): Promise<void> {
   await writeStorageItem(CRUD_OVERLAY_KEY, JSON.stringify(overlay));
-};
+}
 
-export const resetLocalRecipeChanges = async (): Promise<void> => {
+export async function resetLocalRecipeChanges(): Promise<void> {
   await removeStorageItem(CRUD_OVERLAY_KEY);
-};
+}
+
+export async function getLocalUsers(): Promise<LocalUserRecord[]> {
+  const raw = await readStorageItem(USERS_STORAGE_KEY);
+  if (!raw) {
+    await writeStorageItem(USERS_STORAGE_KEY, JSON.stringify(DEFAULT_LOCAL_USERS));
+    return [...DEFAULT_LOCAL_USERS];
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed.map((u) => ({
+        id: Number(u.id),
+        email: String(u.email || '').trim(),
+        password: String(u.password || ''),
+      }));
+    }
+  } catch (err) {
+    console.warn('[preferencesStorage.ts] Error parseando usuarios locales:', err);
+  }
+  return [...DEFAULT_LOCAL_USERS];
+}
+
+export async function saveLocalUsers(users: LocalUserRecord[]): Promise<void> {
+  await writeStorageItem(USERS_STORAGE_KEY, JSON.stringify(users));
+}

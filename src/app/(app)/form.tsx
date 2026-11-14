@@ -13,17 +13,18 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
-import { createRecipe, getRecipe, updateRecipe } from '../services/recipes';
+import { createRecipe, getRecipe, updateRecipe } from '@/services/recipes';
 import {
   RecipeFormPayload,
   RecipeItem,
   VALID_RECIPE_CATEGORIES,
   VALID_RECIPE_DIFFICULTIES,
-} from '../types/RecipeItem';
-import { safeGoBack } from '../utils/navigation';
-import { useThemeMode } from '../utils/preferencesStorage';
-import { validateRecipeForm } from '../utils/validators';
+} from '@/types/RecipeItem';
+import { safeGoBack } from '@/utils/navigation';
+import { useThemeMode } from '@/utils/preferencesStorage';
+import { validateRecipeForm } from '@/utils/validators';
 
 export default function FormScreen() {
   const { recipe, id } = useLocalSearchParams<{
@@ -32,6 +33,8 @@ export default function FormScreen() {
   }>();
   const router = useRouter();
   const isDark = useThemeMode();
+  const { width } = useWindowDimensions();
+  const isSmallScreen = width < 380;
 
   const editing: RecipeItem | null = useMemo(() => {
     if (!recipe) return null;
@@ -55,7 +58,7 @@ export default function FormScreen() {
   const [likeRate, setLikeRate] = useState(String(editing?.likeRate ?? 90));
   const [category, setCategory] = useState(editing?.category ?? 'Mexicanas');
   const [difficulty, setDifficulty] = useState(editing?.difficulty ?? 'Facil');
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState<boolean>(false);
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
@@ -222,6 +225,7 @@ export default function FormScreen() {
             ]}
             placeholder="Ejemplo: Enchiladas suizas tradicionales"
             placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
+            editable={!saving}
             value={title}
             onChangeText={setTitle}
           />
@@ -246,6 +250,7 @@ export default function FormScreen() {
             placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
             multiline
             numberOfLines={4}
+            editable={!saving}
             value={description}
             onChangeText={setDescription}
           />
@@ -260,6 +265,7 @@ export default function FormScreen() {
           </Text>
           <Pressable
             onPress={pickImage}
+            disabled={saving}
             style={[
               styles.imagePicker,
               isDark && styles.imagePickerDark,
@@ -294,6 +300,7 @@ export default function FormScreen() {
             placeholder="https://ejemplo.com/mi-receta.jpg"
             placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
             autoCapitalize="none"
+            editable={!saving}
             value={imageUri ?? ''}
             onChangeText={(text) => setImageUri(text)}
           />
@@ -303,7 +310,12 @@ export default function FormScreen() {
             </Text>
           )}
 
-          <View style={styles.twoColRow}>
+          <View
+            style={[
+              styles.twoColRow,
+              isSmallScreen && styles.twoColRowStacked,
+            ]}
+          >
             <View style={styles.col}>
               <Text style={[styles.label, isDark && styles.textDark]}>
                 Tiempo (HH:MM:SS) *
@@ -317,6 +329,7 @@ export default function FormScreen() {
                 ]}
                 placeholder="00:45:00"
                 placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
+                editable={!saving}
                 value={prepareTime}
                 onChangeText={setPrepareTime}
               />
@@ -343,6 +356,7 @@ export default function FormScreen() {
                 placeholder="90"
                 placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
                 keyboardType="numeric"
+                editable={!saving}
                 value={likeRate}
                 onChangeText={setLikeRate}
               />
@@ -366,6 +380,7 @@ export default function FormScreen() {
                 <Pressable
                   key={cat}
                   onPress={() => setCategory(cat)}
+                  disabled={saving}
                   style={[
                     styles.chip,
                     isDark && styles.chipDark,
@@ -401,6 +416,7 @@ export default function FormScreen() {
                 <Pressable
                   key={diff}
                   onPress={() => setDifficulty(diff)}
+                  disabled={saving}
                   style={[
                     styles.chip,
                     isDark && styles.chipDark,
@@ -465,7 +481,7 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 16,
-    maxWidth: 680,
+    maxWidth: 860,
     width: '100%',
     alignSelf: 'center',
   },
@@ -583,6 +599,9 @@ const styles = StyleSheet.create({
   twoColRow: {
     flexDirection: 'row',
     gap: 12,
+  },
+  twoColRowStacked: {
+    flexDirection: 'column',
   },
   col: {
     flex: 1,

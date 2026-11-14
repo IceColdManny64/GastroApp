@@ -1,5 +1,5 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,31 +10,49 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import {
   DEFAULT_RECIPE_IMAGE,
   deleteRecipe,
   getRecipe,
-} from '../services/recipes';
-import { RecipeItem } from '../types/RecipeItem';
-import { safeGoBack } from '../utils/navigation';
+} from '@/services/recipes';
+import { RecipeItem } from '@/types/RecipeItem';
+import { safeGoBack } from '@/utils/navigation';
 import {
   getFavorites,
   getUserSettings,
   toggleFavorite,
   useThemeMode,
-} from '../utils/preferencesStorage';
+} from '@/utils/preferencesStorage';
 
 export default function DetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const [recipe, setRecipe] = useState<RecipeItem | null>(null);
+  const { id, item: itemString } = useLocalSearchParams<{
+    id?: string;
+    item?: string;
+  }>();
+
+  const initialItem: RecipeItem | null = useMemo(() => {
+    if (!itemString) return null;
+    try {
+      return JSON.parse(itemString) as RecipeItem;
+    } catch {
+      return null;
+    }
+  }, [itemString]);
+
+  const [recipe, setRecipe] = useState<RecipeItem | null>(initialItem);
   const router = useRouter();
   const isDarkTheme = useThemeMode();
+  const { width, height } = useWindowDimensions();
+  const isWideLayout = width >= 660 || (width > height && width >= 560);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(!initialItem);
   const [isFavorite, setIsFavorite] = useState(false);
   const [darkMode, setDarkMode] = useState(isDarkTheme);
-  const [imageUri, setImageUri] = useState<string>(DEFAULT_RECIPE_IMAGE);
+  const [imageUri, setImageUri] = useState<string>(
+    initialItem?.image || DEFAULT_RECIPE_IMAGE
+  );
 
   const isDark = isDarkTheme || darkMode;
 
@@ -44,8 +62,10 @@ export default function DetailScreen() {
 
       (async () => {
         try {
-          setLoading(true);
-          const numericId = Number(id);
+          if (!initialItem) {
+            setLoading(true);
+          }
+          const numericId = Number(id ?? initialItem?.id);
           const [fresh, favs, settings] = await Promise.all([
             getRecipe(numericId),
             getFavorites(),
@@ -60,7 +80,9 @@ export default function DetailScreen() {
           }
         } catch (err) {
           console.error('[details.tsx] Error al cargar detalle:', err);
-          Alert.alert('Error', 'No se pudo cargar la receta');
+          if (!initialItem) {
+            Alert.alert('Error', 'No se pudo cargar la receta');
+          }
         } finally {
           if (isActive) setLoading(false);
         }
@@ -69,7 +91,7 @@ export default function DetailScreen() {
       return () => {
         isActive = false;
       };
-    }, [id])
+    }, [id, initialItem])
   );
 
   const handleToggleFavorite = async () => {
@@ -119,18 +141,14 @@ export default function DetailScreen() {
       return;
     }
 
-    Alert.alert(
-      'Confirmar',
-      '¿Seguro que quieres eliminar esta receta?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: executeDeletion,
-        },
-      ]
-    );
+    Alert.alert('Confirmar', '¿Seguro que quieres eliminar esta receta?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: executeDeletion,
+      },
+    ]);
   };
 
   if (loading) {
@@ -168,14 +186,26 @@ export default function DetailScreen() {
       style={[styles.screen, isDark && styles.screenDark]}
       contentContainerStyle={styles.container}
     >
-      <View style={[styles.detailCard, isDark && styles.detailCardDark]}>
+      <View
+        style={[
+          styles.detailCard,
+          isDark && styles.detailCardDark,
+          isWideLayout && styles.detailCardWide,
+        ]}
+      >
         <Image
           source={{ uri: imageUri }}
-          style={[styles.heroImage, isDark && styles.heroImageDark]}
+          style={[
+            styles.heroImage,
+            isDark && styles.heroImageDark,
+            isWideLayout && styles.heroImageWide,
+          ]}
           onError={() => setImageUri(DEFAULT_RECIPE_IMAGE)}
         />
 
-        <View style={styles.bodyContent}>
+        <View
+          style={[styles.bodyContent, isWideLayout && styles.bodyContentWide]}
+        >
           <View style={styles.topRow}>
             <View
               style={[
@@ -302,7 +332,7 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 16,
-    maxWidth: 760,
+    maxWidth: 1024,
     width: '100%',
     alignSelf: 'center',
   },
@@ -356,6 +386,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#241D1B',
     borderColor: '#382E2B',
   },
+  detailCardWide: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
   heroImage: {
     width: '100%',
     height: 250,
@@ -365,8 +399,16 @@ const styles = StyleSheet.create({
   heroImageDark: {
     backgroundColor: '#181312',
   },
+  heroImageWide: {
+    width: '44%',
+    height: 'auto',
+    minHeight: 320,
+  },
   bodyContent: {
     padding: 20,
+  },
+  bodyContentWide: {
+    flex: 1,
   },
   topRow: {
     flexDirection: 'row',

@@ -1,33 +1,48 @@
 import { UpdateCredentialsResponse, UserProfileResponse } from '../types/Auth';
-import { API_BASE_URL, fetchWithAuth } from '../utils/api';
-
-const UPDATE_CREDENTIALS_URL = `${API_BASE_URL}/updateCredentials.php`;
+import { getLocalUsers, saveLocalUsers } from '../utils/preferencesStorage';
+import { getToken } from '../utils/tokenStorage';
 
 export async function getUserProfile(userId: number): Promise<UserProfileResponse> {
-  return fetchWithAuth<UserProfileResponse>(`/users.php?id=${userId}`);
+  const token = await getToken();
+  if (!token) {
+    throw new Error('Sesión no encontrada. Por favor inicia sesión nuevamente.');
+  }
+
+  const users = await getLocalUsers();
+  const found = users.find((u) => Number(u.id) === Number(userId));
+
+  if (!found) {
+    throw new Error('Usuario no encontrado.');
+  }
+
+  return {
+    id: found.id,
+    email: found.email,
+  };
 }
 
 export async function verifyEmail(
   currentEmail: string
 ): Promise<UpdateCredentialsResponse> {
-  console.log('[user.ts] Verificando correo en servidor:', currentEmail);
+  const normalized = currentEmail.trim().toLowerCase();
+  console.log('[user.ts] Verificando correo:', normalized);
 
-  const response = await fetch(UPDATE_CREDENTIALS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-    body: JSON.stringify({
-      action: 'verify_email',
-      current_email: currentEmail.trim(),
-    }),
-  });
+  const users = await getLocalUsers();
+  const found = users.find((u) => u.email.toLowerCase() === normalized);
 
-  const data: UpdateCredentialsResponse = await response.json();
-
-  if (!response.ok || data.status === 'error') {
-    throw new Error(data.message || data.error || 'Error al verificar el correo electrónico.');
+  if (found) {
+    return {
+      status: 'success',
+      exists: true,
+      id: found.id,
+    };
   }
 
-  return data;
+  return {
+    status: 'success',
+    exists: false,
+    message: 'Email no encontrado',
+  };
 }
 
 export async function verifyPassword(
@@ -36,23 +51,19 @@ export async function verifyPassword(
 ): Promise<UpdateCredentialsResponse> {
   console.log('[user.ts] Verificando contraseña actual para ID:', userId);
 
-  const response = await fetch(UPDATE_CREDENTIALS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-    body: JSON.stringify({
-      action: 'verify_password',
-      id: Number(userId),
-      current_password: currentPassword,
-    }),
-  });
+  const users = await getLocalUsers();
+  const found = users.find((u) => Number(u.id) === Number(userId));
 
-  const data: UpdateCredentialsResponse = await response.json();
-
-  if (!response.ok || data.status === 'error') {
-    throw new Error(data.message || data.error || 'Error al verificar la contraseña actual.');
+  if (!found) {
+    throw new Error('Usuario no encontrado.');
   }
 
-  return data;
+  const valid = found.password === currentPassword;
+  return {
+    status: 'success',
+    valid,
+    message: valid ? 'Contraseña válida' : 'Contraseña incorrecta',
+  };
 }
 
 export async function updateCredentials(
@@ -60,28 +71,37 @@ export async function updateCredentials(
   newEmail: string,
   newPassword: string
 ): Promise<UpdateCredentialsResponse> {
+  const cleanEmail = newEmail.trim();
+  const normalizedEmail = cleanEmail.toLowerCase();
   console.log('[user.ts] Actualizando credenciales para ID:', userId);
 
-  const response = await fetch(UPDATE_CREDENTIALS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-    body: JSON.stringify({
-      action: 'update_credentials',
-      id: Number(userId),
-      new_email: newEmail.trim(),
-      new_password: newPassword,
-    }),
-  });
+  const users = await getLocalUsers();
+  const userIndex = users.findIndex((u) => Number(u.id) === Number(userId));
 
-  const data: UpdateCredentialsResponse = await response.json();
-
-  if (!response.ok || data.status !== 'success') {
-    throw new Error(
-      data.message || data.error || 'No se pudieron actualizar las credenciales.'
-    );
+  if (userIndex === -1) {
+    throw new Error('Usuario no encontrado.');
   }
 
-  return data;
+  const emailTakenByOther = users.some(
+    (u) => u.id !== Number(userId) && u.email.toLowerCase() === normalizedEmail
+  );
+  if (emailTakenByOther) {
+    throw new Error('Ese correo electrónico ya está en uso por otra cuenta.');
+  }
+
+  users[userIndex] = {
+    ...users[userIndex],
+    email: cleanEmail,
+    password: newPassword,
+  };
+
+  await saveLocalUsers(users);
+
+  return {
+    status: 'success',
+    message: 'Credenciales actualizadas correctamente',
+    affected_rows: 1,
+  };
 }
 
 export const verifyUserEmail = verifyEmail;
