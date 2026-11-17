@@ -1,0 +1,302 @@
+[
+  {
+    "id": 1,
+    "title": "Un manjar de italia: la pizza",
+    "description": "Descubre algo mas sobre este manjar!",
+    "imageURL": "https://assets.tmecosys.com/image/upload/t_web_rdp_recipe_584x480_1_5x/img/recipe/ras/Assets/48a49653c8716457eb0b2f7eb3c7d74c/Derivates/8d83d9ed4567fa15456d8eec7557e60006a15576.jpg",
+    "preparetime": "01:00:00",
+    "likerate": 90,
+    "category": "Italianas",
+    "difficulty": "Facil"
+  },
+  {
+    "id": 2,
+    "title": "Kebab: Brocheta estilo europeo",
+    "description": "Sabor delicioso en todas sus formas",
+    "imageURL": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5b/Lula_kebab_2.jpg/960px-Lula_kebab_2.jpg",
+    "preparetime": "00:20:00",
+    "likerate": 75,
+    "category": "Orientales",
+    "difficulty": "Facil"
+  },
+  {
+    "id": 3,
+    "title": "Enchiladas verdes",
+    "description": "Bañadas en salsa verde",
+    "imageURL": "https://familiakitchen.com/wp-content/uploads/2021/01/iStock-1178656148-enchiladas-low-res-v3.jpg",
+    "preparetime": "00:40:00",
+    "likerate": 90,
+    "category": "Mexicanas",
+    "difficulty": "Medio"
+  },
+  {
+    "id": 4,
+    "title": "Mole poblano",
+    "description": "Delicia de muchos ingredientes",
+    "imageURL": "https://recetas.encolombia.com/wp-content/uploads/2022/08/Mole-Poblano.jpg",
+    "preparetime": "01:20:00",
+    "likerate": 98,
+    "category": "Mexicanas",
+    "difficulty": "Dificil"
+  },
+  {
+    "id": 5,
+    "title": "Flautas",
+    "description": "Por si traes ganas de fritanga",
+    "imageURL": "https://sabrosano.com/wp-content/uploads/2020/05/Flautas_res_principal.jpg",
+    "preparetime": "00:30:00",
+    "likerate": 80,
+    "category": "Mexicanas",
+    "difficulty": "Facil"
+  },
+  {
+    "id": 6,
+    "title": "Pasta bolognesa",
+    "description": "Pasta con carne molida!",
+    "imageURL": "https://www.laespanolaaceites.com/wp-content/uploads/2019/05/espaguetis-a-la-bolonesa.jpg",
+    "preparetime": "01:00:00",
+    "likerate": 80,
+    "category": "Italianas",
+    "difficulty": "Facil"
+  },
+  {
+    "id": 7,
+    "title": "Tamales",
+    "description": "Un clásico con masa, carne y salsa",
+    "imageURL": "https://editorialtelevisa.brightspotcdn.com/dims4/default/ce58fd2/2147483647/strip/true/crop/560x560+220+0/resize/1000x1000!/quality/90/?url=https%3A%2F%2Fk2-prod-editorial-televisa.s3.us-east-1.amazonaws.com%2Fbrightspot%2Fwp-content%2Fuploads%2F2021%2F01%2Ftamales-verdes-de-pollo.jpg",
+    "preparetime": "01:00:00",
+    "likerate": 90,
+    "category": "Mexicanas",
+    "difficulty": "Medio"
+  },
+  {
+    "id": 8,
+    "title": "Tacos al pastor",
+    "description": "Un manjar galardonado globalmente",
+    "imageURL": "https://comedera.com/wp-content/uploads/sites/9/2017/08/tacos-al-pastor-receta.jpg",
+    "preparetime": "01:30:00",
+    "likerate": 98,
+    "category": "Mexicanas",
+    "difficulty": "Medio"
+  },
+  {
+    "id": 9,
+    "title": "Hamburguesas de pollo",
+    "description": "Por si no hay res en casa",
+    "imageURL": "https://www.recetasnestle.com.ec/sites/default/files/srh_recipes/681c719667d572276a1507aea71de9ca.jpg",
+    "preparetime": "01:00:00",
+    "likerate": 75,
+    "category": "Estadounidenses",
+    "difficulty": "Facil"
+  },
+  {
+    "id": 10,
+    "title": "Sincronizadas sencillas",
+    "description": "Lo simple nunca te fallará",
+    "imageURL": "https://imag.bonviveur.com/sincronizadas-de-jamon-y-queso-foto-principal.jpg",
+    "preparetime": "00:20:00",
+    "likerate": 90,
+    "category": "Mexicanas",
+    "difficulty": "Muy facil"
+  },
+  {
+    "id": 11,
+    "title": "Caldo de pollo",
+    "description": "Para combatir el frio con sustancia",
+    "imageURL": "https://sasonregional.com/wp-content/uploads/2024/08/image-2024-08-23T152428.388-1024x768.jpg",
+    "preparetime": "01:30:00",
+    "likerate": 85,
+    "category": "Mexicanas",
+    "difficulty": "Muy facil"
+  },
+  {
+    "id": 12,
+    "title": "Huevos a la mexicana",
+    "description": "Con todo el estilo del gran México",
+    "imageURL": "https://www.maricruzavalos.com/wp-content/uploads/2017/11/huevos-a-la-mexicana-recipe.jpg",
+    "preparetime": "00:20:00",
+    "likerate": 80,
+    "category": "Mexicanas",
+    "difficulty": "Facil"
+  },
+  {
+    "id": 13,
+    "title": "Ensalada César",
+    "description": "Una opcion saludable",
+    "imageURL": "https://www.goodnes.com/sites/g/files/jgfbjl321/files/srh_recipes/755f697272cbcdc6e5df2adb44b1b705.jpg",
+    "preparetime": "00:25:00",
+    "likerate": 80,
+    "category": "Saludables",
+    "difficulty": "Facil"
+  },
+  {
+    "id": 14,
+    "title": "Pizza margarita",
+    "description": "Una tradicion de italia",
+    "imageURL": "https://assets.elgourmet.com/wp-content/uploads/2023/03/Fm5utL5Ga4fRKIMETODOS2WoqKu8CWS2apF.png",
+    "preparetime": "01:00:00",
+    "likerate": 90,
+    "category": "Italianas",
+    "difficulty": "Medio"
+  },
+  {
+    "id": 15,
+    "title": "Flan napolitano",
+    "description": "Un postre con base de huevo",
+    "imageURL": "https://peopleenespanol.com/thmb/pBjjGnmRLuhiPv5bAN6-MhhQZqY=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/flan-napolitano-tradicional-2000-56d3d74137b34a0f992b5746b7cc1e38.jpg",
+    "preparetime": "00:30:00",
+    "likerate": 95,
+    "category": "Postres",
+    "difficulty": "Medio"
+  },
+  {
+    "id": 16,
+    "title": "Smoothie verde",
+    "description": "Una mezcla de verduras",
+    "imageURL": "https://www.vitamixespana.com/recetas/wp-content/uploads/2018/04/smoothie-verde-vitamix.jpg",
+    "preparetime": "00:10:00",
+    "likerate": 90,
+    "category": "Saludables",
+    "difficulty": "Facil"
+  },
+  {
+    "id": 17,
+    "title": "Hamburguesa de camaron",
+    "description": "Un clasico con mariscos",
+    "imageURL": "https://www.cocinavital.mx/wp-content/uploads/2018/03/receta-de-hamburguesa-de-camaron-con-queso.jpg",
+    "preparetime": "01:00:00",
+    "likerate": 70,
+    "category": "Estadounidenses",
+    "difficulty": "Medio"
+  },
+  {
+    "id": 18,
+    "title": "Salpicon de camaron",
+    "description": "Algo fresquito",
+    "imageURL": "https://cheforopeza.com.mx/wp-content/uploads/2017/07/tostaditas-de-salpicon-de-camaron_recetas_chef-oropeza-jpg",
+    "preparetime": "01:30:00",
+    "likerate": 80,
+    "category": "Mexicanas",
+    "difficulty": "Facil"
+  },
+  {
+    "id": 19,
+    "title": "Fajitas de pollo",
+    "description": "Fritanga sabrosa",
+    "imageURL": "https://cdn.recetasderechupete.com/wp-content/uploads/2014/05/fajitas_pollo.jpg",
+    "preparetime": "01:00:00",
+    "likerate": 60,
+    "category": "Mexicanas",
+    "difficulty": "Facil"
+  },
+  {
+    "id": 20,
+    "title": "Pasta de crema de hongos",
+    "description": "Suave y delicioso",
+    "imageURL": "https://i.ytimg.com/vi/aPyrMFkxPPs/maxresdefault.jpg",
+    "preparetime": "01:30:00",
+    "likerate": 90,
+    "category": "Italianas",
+    "difficulty": "Medio"
+  },
+  {
+    "id": 21,
+    "title": "Gelatina de mosaico",
+    "description": "Un postre a veces incomprendido",
+    "imageURL": "https://www.recetasnestle.com.ec/sites/default/files/srh_recipes/1e75cd7dc9091722fec4f5cae018bb9a.jpg",
+    "preparetime": "00:40:00",
+    "likerate": 79,
+    "category": "Postres",
+    "difficulty": "Facil"
+  },
+  {
+    "id": 22,
+    "title": "Carlota",
+    "description": "Un postre alimonado",
+    "imageURL": "https://images.aws.nestle.recipes/original/71ff3eccec6532b6a2750fc4e1b9f4f2_imagen8.jpg",
+    "preparetime": "01:00:00",
+    "likerate": 85,
+    "category": "Postres",
+    "difficulty": "Medio"
+  },
+  {
+    "id": 23,
+    "title": "Pollo al cilantro",
+    "description": "Rico saborcito a hierbas",
+    "imageURL": "https://sabrosano.com/wp-content/uploads/2020/05/FotoPaso_4-11-1-principal.jpg",
+    "preparetime": "01:30:00",
+    "likerate": 90,
+    "category": "Mexicanas",
+    "difficulty": "Dificil"
+  },
+  {
+    "id": 24,
+    "title": "Chili Dog",
+    "description": "Un giro picosito",
+    "imageURL": "https://www.simplyrecipes.com/thmb/7ROH4eqjTVeOIhpR4ZWzLUe4CHQ=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/__opt__aboutcom__coeus__resources__content_migration__simply_recipes__uploads__2010__05__chili-dog-horiz-a-1600-1a1f025054124cd886baab5b14d8d5b6.jpg",
+    "preparetime": "01:20:00",
+    "likerate": 90,
+    "category": "Estadounidenses",
+    "difficulty": "Facil"
+  },
+  {
+    "id": 25,
+    "title": "Ensalada de frutas",
+    "description": "Dulce pero sustanciosa",
+    "imageURL": "https://www.bancodealimentoschicago.org/wp-content/uploads/2022/04/Fruit-Salad.jpg",
+    "preparetime": "00:10:00",
+    "likerate": 95,
+    "category": "Saludables",
+    "difficulty": "Muy facil"
+  },
+  {
+    "id": 26,
+    "title": "Mojarra frita",
+    "description": "Mariscos y fritanga!",
+    "imageURL": "https://i.ytimg.com/vi/lbwEsmmyTi4/maxresdefault.jpg",
+    "preparetime": "01:30:00",
+    "likerate": 90,
+    "category": "Mexicanas",
+    "difficulty": "Dificil"
+  },
+  {
+    "id": 27,
+    "title": "Tortitas de papa",
+    "description": "Con quesito gratinado",
+    "imageURL": "https://laroussecocina.mx/wp-content/uploads/2020/01/S050419-08-TORTITAS-DE-PAPA-0383.jpg",
+    "preparetime": "00:30:00",
+    "likerate": 79,
+    "category": "Mexicanas",
+    "difficulty": "Medio"
+  },
+  {
+    "id": 28,
+    "title": "Fetuccini con camarones",
+    "description": "El sabor de Italia en el mar",
+    "imageURL": "https://www.cocinavital.mx/wp-content/uploads/2017/10/fetuccinicamarones-1.jpg",
+    "preparetime": "02:00:00",
+    "likerate": 98,
+    "category": "Italianas",
+    "difficulty": "Dificil"
+  },
+  {
+    "id": 29,
+    "title": "Lomo relleno",
+    "description": "Un clásico para navidad",
+    "imageURL": "https://editorialtelevisa.brightspotcdn.com/wp-content/uploads/2019/12/lomo-relleno-navideno.jpg",
+    "preparetime": "01:30:00",
+    "likerate": 90,
+    "category": "Mexicanas",
+    "difficulty": "Dificil"
+  },
+  {
+    "id": 30,
+    "title": "Tiramisu",
+    "description": "Chocolate amargo y delicioso",
+    "imageURL": "https://www.paulinacocina.net/wp-content/uploads/2020/01/receta-de-tiramisu-facil-y-economico-1740483918-1200x900.jpg",
+    "preparetime": "00:30:00",
+    "likerate": 90,
+    "category": "Postres",
+    "difficulty": "Medio"
+  }
+]
