@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
+import defaultUsersRaw from '@/data/users.json';
 import { UserSettings } from '@/types/Auth';
 import { RecipeItem } from '@/types/RecipeItem';
 import { getUserSession } from './tokenStorage';
@@ -17,13 +18,7 @@ export interface LocalUserRecord {
   password: string;
 }
 
-const DEFAULT_LOCAL_USERS: LocalUserRecord[] = [
-  {
-    id: 1,
-    email: 'admin@gastrolab.com',
-    password: '1234',
-  },
-];
+const DEFAULT_LOCAL_USERS: LocalUserRecord[] = defaultUsersRaw as unknown as LocalUserRecord[];
 
 export interface CrudOverlayState {
   createdRecipes: RecipeItem[];
