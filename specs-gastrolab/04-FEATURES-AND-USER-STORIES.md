@@ -69,8 +69,8 @@ Este documento describe de forma exhaustiva y autónoma cómo debe funcionar cad
   - Título, insignias de Categoría, Dificultad, Tiempo de preparación (`prepareTime`) y Porcentaje de aprobación (`likeRate%`).
   - Descripción completa de la receta.
   - **Bloque de Botones de Acción CRUD (`styles.actions`):**
-    - `<Pressable onPress={handleEdit} style={[styles.button, styles.editButton]}>` con texto `"Editar"`, que navega a `/form` pasando `params: { recipe: JSON.stringify(recipe) }`.
-    - `<Pressable onPress={handleDelete} style={[styles.button, styles.deleteButton]}>` con texto `"Eliminar"`, que solicita confirmación antes de llamar a `await deleteRecipe(recipe.id)` y `router.back()`.
+    - `<Pressable onPress={handleEdit} style={[styles.button, styles.editButton]}>` con texto `"Editar"`, que navega a `/form` pasando `params: { id: String(recipe.id), recipe: JSON.stringify(safeRecipePayload) }`.
+    - `<Pressable onPress={handleDelete} style={[styles.button, styles.deleteButton]}>` con texto `"Eliminar"`, que solicita confirmación (`confirmAction`) antes de llamar a `await deleteRecipe(recipe.id)` y `safeGoBack(router, '/home')`.
 
 ---
 
@@ -87,7 +87,9 @@ Este documento describe de forma exhaustiva y autónoma cómo debe funcionar cad
   - También permite escribir o pegar una URL de imagen directamente.
 - **Guardado (`handleSave`):**
   - Valida que ningún campo obligatorio esté vacío y que `likeRate` sea un número entero entre `0` y `100` y `prepareTime` tenga formato `HH:MM:SS`.
-  - Llama a `await updateRecipe(editing.id, formData, payload)` si `editing` existe, o `await createRecipe(formData, payload)` si es nueva, y al terminar regresa con `router.back()`.
+  - Si se eligió una imagen local desde la galería, la normaliza a un Data URI JPEG compacto para que sobreviva recargas en `recipes.json`.
+  - Llama a `await updateRecipe(editingId, payload)` si `editingId` existe, o `await createRecipe(payload)` si es nueva, y al terminar regresa con `safeGoBack(router, fallbackDestination)`.
+  - Si ocurre algún error, muestra un banner inline y una alerta multiplataforma (`showAlert`) compatible con Web y móvil.
 
 ---
 

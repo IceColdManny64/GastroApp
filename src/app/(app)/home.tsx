@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -47,8 +47,8 @@ export default function HomeScreen() {
   const [userSettings, setUserSettings] = useState<UserSettings>(
     DEFAULT_USER_SETTINGS
   );
-  const [hasAppliedDefaultCategory, setHasAppliedDefaultCategory] =
-    useState(false);
+  const hasAppliedDefaultCategoryRef = useRef(false);
+  const serverSearchActiveRef = useRef(false);
   const [currentPage, setCurrentPage] = useState(1);
 
   const [filters, setFilters] = useState<RecipeFilterState>({
@@ -73,6 +73,7 @@ export default function HomeScreen() {
       }
 
       setError(null);
+      serverSearchActiveRef.current = false;
       const [data, favs, settings] = await Promise.all([
         getRecipes(),
         getFavorites(),
@@ -83,12 +84,12 @@ export default function HomeScreen() {
       setFavoriteIds(favs);
       setUserSettings(settings);
 
-      if (!hasAppliedDefaultCategory && settings.defaultCategory) {
+      if (!hasAppliedDefaultCategoryRef.current && settings.defaultCategory) {
+        hasAppliedDefaultCategoryRef.current = true;
         setFilters((prev) => ({
           ...prev,
           category: settings.defaultCategory,
         }));
-        setHasAppliedDefaultCategory(true);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -96,7 +97,7 @@ export default function HomeScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [hasAppliedDefaultCategory, router]);
+  }, [router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -113,7 +114,9 @@ export default function HomeScreen() {
     try {
       setLoading(true);
       setError(null);
-      const data = await getRecipes(filters.searchQuery);
+      const cleanQuery = filters.searchQuery.trim();
+      serverSearchActiveRef.current = cleanQuery.length > 0;
+      const data = await getRecipes(cleanQuery || undefined);
       setRecipes(data);
       setCurrentPage(1);
     } catch (err) {
@@ -122,6 +125,22 @@ export default function HomeScreen() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetAllFilters = async () => {
+    setFilters({
+      searchQuery: '',
+      category: 'Todas',
+      difficulty: 'Todas',
+      sortBy: 'default',
+      onlyFavorites: false,
+    });
+    setCurrentPage(1);
+    if (serverSearchActiveRef.current) {
+      serverSearchActiveRef.current = false;
+      const fullData = await getRecipes();
+      setRecipes(fullData);
     }
   };
 
@@ -199,6 +218,27 @@ export default function HomeScreen() {
     return filteredRecipes.slice(start, start + itemsPerPage);
   }, [filteredRecipes, safeCurrentPage, itemsPerPage]);
 
+  const activeFavoritesCount = useMemo(() => {
+    if (serverSearchActiveRef.current) {
+      return favoriteIds.length;
+    }
+    return recipes.filter((item) => favoriteIds.includes(item.id)).length;
+  }, [recipes, favoriteIds]);
+
+  const navigateToDetail = (item: RecipeItem) => {
+    const safeItemParam =
+      item.image && item.image.startsWith('data:')
+        ? { ...item, image: '', imageURL: '' }
+        : item;
+    router.push({
+      pathname: '/details',
+      params: {
+        id: String(item.id),
+        item: JSON.stringify(safeItemParam),
+      },
+    });
+  };
+
   const isDark = isDarkTheme || userSettings.themeMode === 'dark';
 
   if (loading) {
@@ -255,7 +295,7 @@ export default function HomeScreen() {
                 style={[styles.actionBtn, styles.secondaryActionBtn]}
               >
                 <Text style={styles.actionBtnText}>
-                  ♥ Favoritos ({favoriteIds.length})
+                  ♥ Favoritos ({activeFavoritesCount})
                 </Text>
               </Pressable>
 
@@ -277,11 +317,17 @@ export default function HomeScreen() {
             <SearchFilterBar
               filters={filters}
               totalResults={filteredRecipes.length}
-              favoritesCount={favoriteIds.length}
+              favoritesCount={activeFavoritesCount}
               darkMode={isDark}
               onChangeSearch={(text: string) => {
                 setFilters((prev) => ({ ...prev, searchQuery: text }));
                 setCurrentPage(1);
+                if (text.trim() === '' && serverSearchActiveRef.current) {
+                  serverSearchActiveRef.current = false;
+                  getRecipes()
+                    .then(setRecipes)
+                    .catch(() => {});
+                }
               }}
               onSubmitServerSearch={handleServerSearch}
               onSelectCategory={(category: RecipeCategory) => {
@@ -303,18 +349,7 @@ export default function HomeScreen() {
                 }));
                 setCurrentPage(1);
               }}
-              onResetFilters={async () => {
-                setFilters({
-                  searchQuery: '',
-                  category: 'Todas',
-                  difficulty: 'Todas',
-                  sortBy: 'default',
-                  onlyFavorites: false,
-                });
-                setCurrentPage(1);
-                const fullData = await getRecipes();
-                setRecipes(fullData);
-              }}
+              onResetFilters={handleResetAllFilters}
             />
           </View>
         }
@@ -334,15 +369,7 @@ export default function HomeScreen() {
               }
               darkMode={isDark}
               onToggleFavorite={() => handleToggleFavorite(item.id)}
-              onPress={() =>
-                router.push({
-                  pathname: '/details',
-                  params: {
-                    id: String(item.id),
-                    item: JSON.stringify(item),
-                  },
-                })
-              }
+              onPress={() => navigateToDetail(item)}
             />
           </View>
         )}
@@ -352,16 +379,7 @@ export default function HomeScreen() {
               No se encontraron recetas con los filtros seleccionados.
             </Text>
             <Pressable
-              onPress={() => {
-                setFilters({
-                  searchQuery: '',
-                  category: 'Todas',
-                  difficulty: 'Todas',
-                  sortBy: 'default',
-                  onlyFavorites: false,
-                });
-                setCurrentPage(1);
-              }}
+              onPress={handleResetAllFilters}
               style={styles.retryButton}
             >
               <Text style={styles.retryText}>Mostrar todas las recetas</Text>

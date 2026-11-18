@@ -2,7 +2,6 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   Pressable,
@@ -18,6 +17,7 @@ import {
   getRecipe,
 } from '@/services/recipes';
 import { RecipeItem } from '@/types/RecipeItem';
+import { confirmAction, showAlert } from '@/utils/alerts';
 import { safeGoBack } from '@/utils/navigation';
 import {
   getFavorites,
@@ -27,21 +27,32 @@ import {
 } from '@/utils/preferencesStorage';
 
 export default function DetailScreen() {
-  const { id } = useLocalSearchParams<{
+  const { id, item: itemString } = useLocalSearchParams<{
     id?: string;
     item?: string;
   }>();
 
-  const [recipe, setRecipe] = useState<RecipeItem | null>(null);
+  const initialItem: RecipeItem | null = useMemo(() => {
+    if (!itemString) return null;
+    try {
+      return JSON.parse(itemString) as RecipeItem;
+    } catch {
+      return null;
+    }
+  }, [itemString]);
+
+  const [recipe, setRecipe] = useState<RecipeItem | null>(initialItem);
   const router = useRouter();
   const isDarkTheme = useThemeMode();
   const { width, height } = useWindowDimensions();
   const isWideLayout = width >= 660 || (width > height && width >= 560);
 
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(!initialItem);
   const [isFavorite, setIsFavorite] = useState(false);
   const [darkMode, setDarkMode] = useState(isDarkTheme);
-  const [imageUri, setImageUri] = useState<string>(DEFAULT_RECIPE_IMAGE);
+  const [imageUri, setImageUri] = useState<string>(
+    initialItem?.image || DEFAULT_RECIPE_IMAGE
+  );
 
   const isDark = isDarkTheme || darkMode;
 
@@ -51,7 +62,7 @@ export default function DetailScreen() {
 
       (async () => {
         try {
-          const numericId = Number(id);
+          const numericId = Number(id ?? initialItem?.id);
           if (!numericId) return;
 
           const [fresh, favs, settings] = await Promise.all([
@@ -68,7 +79,12 @@ export default function DetailScreen() {
           }
         } catch (err) {
           console.error('[details.tsx] Error al cargar detalle:', err);
-          Alert.alert('Error', 'No se pudo cargar la receta');
+          if (isActive) {
+            setRecipe(null);
+          }
+          if (!initialItem) {
+            showAlert('Error', 'No se pudo cargar la receta.');
+          }
         } finally {
           if (isActive) setLoading(false);
         }
@@ -77,7 +93,7 @@ export default function DetailScreen() {
       return () => {
         isActive = false;
       };
-    }, [id])
+    }, [id, initialItem])
   );
 
   const handleToggleFavorite = async () => {
@@ -107,34 +123,20 @@ export default function DetailScreen() {
       await deleteRecipe(recipe.id);
       safeGoBack(router, '/home');
     } catch (err) {
-      Alert.alert(
+      showAlert(
         'Error',
-        err instanceof Error ? err.message : 'No se pudo eliminar'
+        err instanceof Error ? err.message : 'No se pudo eliminar la receta.'
       );
     }
   };
 
   const handleDelete = () => {
     if (!recipe) return;
-
-    if (Platform.OS === 'web') {
-      const confirmed = window.confirm(
-        '¿Seguro que quieres eliminar esta receta?'
-      );
-      if (confirmed) {
-        executeDeletion();
-      }
-      return;
-    }
-
-    Alert.alert('Confirmar', '¿Seguro que quieres eliminar esta receta?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: executeDeletion,
-      },
-    ]);
+    confirmAction(
+      'Confirmar',
+      '¿Seguro que quieres eliminar esta receta?',
+      executeDeletion
+    );
   };
 
   if (loading) {

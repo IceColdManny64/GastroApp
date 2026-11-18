@@ -2,7 +2,6 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,6 +12,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { showAlert } from '@/utils/alerts';
 import { registerUser } from '@/utils/auth';
 import { useThemeMode } from '@/utils/preferencesStorage';
 import { validateAuthForm } from '@/utils/validators';
@@ -40,14 +40,14 @@ export default function RegisterScreen() {
     if (!validation.isValid) {
       const msg = validation.errorMessage || 'Verifica los datos ingresados.';
       setErrorMessage(msg);
-      Alert.alert('Datos inválidos', msg);
+      showAlert('Datos inválidos', msg);
       return;
     }
 
     try {
       setLoading(true);
       await registerUser(email, password);
-      Alert.alert(
+      showAlert(
         'Cuenta creada',
         'Tu cuenta ha sido registrada exitosamente. Ahora puedes iniciar sesión.'
       );
@@ -56,7 +56,7 @@ export default function RegisterScreen() {
       const msg =
         err instanceof Error ? err.message : 'No se pudo completar el registro.';
       setErrorMessage(msg);
-      Alert.alert('Error de registro', msg);
+      showAlert('Error de registro', msg);
     } finally {
       setLoading(false);
     }

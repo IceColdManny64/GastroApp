@@ -3,7 +3,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -22,9 +21,46 @@ import {
   VALID_RECIPE_CATEGORIES,
   VALID_RECIPE_DIFFICULTIES,
 } from '@/types/RecipeItem';
+import { showAlert } from '@/utils/alerts';
 import { safeGoBack } from '@/utils/navigation';
 import { useThemeMode } from '@/utils/preferencesStorage';
 import { validateRecipeForm } from '@/utils/validators';
+
+async function normalizePickedAssetToUri(
+  asset: ImagePicker.ImagePickerAsset
+): Promise<string> {
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    try {
+      const sourceUri = asset.uri;
+      const img = new window.Image();
+      img.crossOrigin = 'anonymous';
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('No se pudo procesar la imagen.'));
+        img.src = sourceUri;
+      });
+      const maxWidth = 720;
+      const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL('image/jpeg', 0.65);
+      }
+    } catch (err) {
+      console.warn('[form.tsx] Usando fallback de imagen en Web:', err);
+    }
+  }
+
+  if (asset.base64) {
+    const mime = asset.mimeType || 'image/jpeg';
+    return `data:${mime};base64,${asset.base64}`;
+  }
+
+  return asset.uri;
+}
 
 export default function FormScreen() {
   const { recipe, id } = useLocalSearchParams<{
@@ -50,7 +86,7 @@ export default function FormScreen() {
   const [title, setTitle] = useState(editing?.title ?? '');
   const [description, setDescription] = useState(editing?.description ?? '');
   const [imageUri, setImageUri] = useState<string | null>(
-    editing?.image ?? null
+    editing?.image || null
   );
   const [prepareTime, setPrepareTime] = useState(
     editing?.prepareTime ?? '00:30:00'
@@ -58,7 +94,11 @@ export default function FormScreen() {
   const [likeRate, setLikeRate] = useState(String(editing?.likeRate ?? 90));
   const [category, setCategory] = useState(editing?.category ?? 'Mexicanas');
   const [difficulty, setDifficulty] = useState(editing?.difficulty ?? 'Facil');
+  const [loadingInitial, setLoadingInitial] = useState<boolean>(
+    Boolean(editingId && (!editing || !editing.image))
+  );
   const [saving, setSaving] = useState<boolean>(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
@@ -81,6 +121,10 @@ export default function FormScreen() {
         }
       } catch (err) {
         console.warn('[form.tsx] Usando datos iniciales de edición:', err);
+      } finally {
+        if (isMounted) {
+          setLoadingInitial(false);
+        }
       }
     })();
 
@@ -93,7 +137,7 @@ export default function FormScreen() {
     if (Platform.OS !== 'web') {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permiso denegado', 'Necesitamos acceso a tus fotos');
+        showAlert('Permiso denegado', 'Necesitamos acceso a tus fotos');
         return;
       }
     }
@@ -101,11 +145,13 @@ export default function FormScreen() {
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.7,
+      quality: 0.5,
+      base64: true,
     });
 
     if (!result.canceled && result.assets[0]) {
-      setImageUri(result.assets[0].uri);
+      const normalizedUri = await normalizePickedAssetToUri(result.assets[0]);
+      setImageUri(normalizedUri);
       setValidationErrors((prev) => {
         const next = { ...prev };
         delete next.imageUri;
@@ -117,6 +163,7 @@ export default function FormScreen() {
   const fallbackDestination = editingId ? `/details?id=${editingId}` : '/home';
 
   const handleSave = async () => {
+    setSubmitError(null);
     const validation = validateRecipeForm({
       title,
       description,
@@ -129,10 +176,9 @@ export default function FormScreen() {
 
     if (!validation.isValid) {
       setValidationErrors(validation.fieldErrors);
-      Alert.alert(
-        'Campos inválidos',
-        validation.errorMessage || 'Revisa los datos ingresados.'
-      );
+      const msg = validation.errorMessage || 'Revisa los datos ingresados.';
+      setSubmitError(msg);
+      showAlert('Campos inválidos', msg);
       return;
     }
 
@@ -152,52 +198,42 @@ export default function FormScreen() {
 
     try {
       setSaving(true);
-      const formData = new FormData();
-      formData.append('title', payload.title);
-      formData.append('description', payload.description);
-      formData.append('preparetime', payload.prepareTime);
-      formData.append('likerate', String(payload.likeRate));
-      formData.append('category', payload.category);
-      formData.append('difficulty', payload.difficulty);
-      formData.append('imageURL', payload.imageUri);
-
-      if (Platform.OS === 'web') {
-        try {
-          if (cleanUri.startsWith('blob:') || cleanUri.startsWith('data:')) {
-            const res = await fetch(cleanUri);
-            const blob = await res.blob();
-            formData.append('image', blob, 'photo.jpg');
-          }
-        } catch (blobErr) {
-          console.warn('[form.tsx] Usando URL directa en FormData:', blobErr);
-        }
-      } else {
-        const filename = cleanUri.split('/').pop() || 'photo.jpg';
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : 'image/jpeg';
-        formData.append('image', {
-          uri: cleanUri,
-          name: filename,
-          type,
-        } as any);
-      }
-
       if (editingId) {
-        await updateRecipe(editingId, formData, payload);
+        await updateRecipe(editingId, payload);
       } else {
-        await createRecipe(formData, payload);
+        await createRecipe(payload);
       }
 
       safeGoBack(router, fallbackDestination);
     } catch (err) {
-      Alert.alert(
-        'Error al guardar',
-        err instanceof Error ? err.message : 'No se pudo guardar la receta.'
-      );
+      const msg =
+        err instanceof Error ? err.message : 'No se pudo guardar la receta.';
+      setSubmitError(msg);
+      showAlert('Error al guardar', msg);
     } finally {
       setSaving(false);
     }
   };
+
+  if (loadingInitial) {
+    return (
+      <View
+        style={[
+          styles.keyboardWrapper,
+          styles.centered,
+          isDark && styles.keyboardWrapperDark,
+        ]}
+      >
+        <ActivityIndicator
+          size="large"
+          color={isDark ? '#E74C3C' : '#C0392B'}
+        />
+        <Text style={[styles.placeholderText, isDark && styles.subTextDark]}>
+          Cargando datos de la receta...
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -212,6 +248,18 @@ export default function FormScreen() {
           <Text style={[styles.heading, isDark && styles.textDark]}>
             {editingId ? 'Editar receta' : 'Crear nueva receta'}
           </Text>
+
+          {submitError && (
+            <View
+              style={[styles.errorBanner, isDark && styles.errorBannerDark]}
+            >
+              <Text
+                style={[styles.fieldError, isDark && styles.fieldErrorDark]}
+              >
+                {submitError}
+              </Text>
+            </View>
+          )}
 
           <Text style={[styles.label, isDark && styles.textDark]}>
             Título de la receta *
@@ -478,6 +526,23 @@ const styles = StyleSheet.create({
   },
   keyboardWrapperDark: {
     backgroundColor: '#181312',
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  errorBanner: {
+    backgroundColor: '#FDEDEC',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#F5B7B1',
+  },
+  errorBannerDark: {
+    backgroundColor: '#3A1F1E',
+    borderColor: '#78281F',
   },
   container: {
     padding: 16,

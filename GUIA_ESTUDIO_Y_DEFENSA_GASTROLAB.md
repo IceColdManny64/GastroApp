@@ -73,14 +73,16 @@ flowchart TD
         PAG["paginationBar.tsx\n(10 / 20 / 30 por pág.)"]
     end
 
-    subgraph SERV ["3. Servicios del Dominio (src/services/)"]
+    subgraph SERV ["3. Servicios del Dominio y Microservicio JSON"]
         REC_SRV["recipes.ts\n(CRUD + Adaptador)"]
         USR_SRV["user.ts\n(Perfil y Credenciales)"]
+        NODE_SRV["server.js (Puerto 3001)\nMicroservicio REST Minimalista"]
     end
 
-    subgraph UTIL ["4. Utilidades y Almacenamiento (src/utils/ & src/data/)"]
-        DATA["recipesData.ts\n(30 Recetas Originales)"]
-        PREF["preferencesStorage.ts\n(Overlay CRUD, Favoritos, Ajustes, Usuarios)"]
+    subgraph UTIL ["4. Datos JSON, Utilidades y Respaldo (src/data/ & src/utils/)"]
+        JSONS["recipes.json y users.json\n(Persistencia Física en Disco)"]
+        DATA["recipesData.ts\n(Respaldo Offline de 30 Recetas)"]
+        PREF["preferencesStorage.ts\n(Caché Local, Favoritos, Ajustes, Tema)"]
         TOK["tokenStorage.ts\n(Token en SecureStore / localStorage)"]
         VAL["validators.ts\n(Validación de textos y tipos)"]
     end
@@ -90,10 +92,14 @@ flowchart TD
     APP --> COMP
     AUTH --> VAL
     AUTH --> TOK
+    AUTH --> NODE_SRV
     APP --> SERV
-    REC_SRV --> DATA
-    REC_SRV --> PREF
-    USR_SRV --> PREF
+    REC_SRV --> NODE_SRV
+    USR_SRV --> NODE_SRV
+    NODE_SRV --> JSONS
+    REC_SRV -.->|Si server.js está apagado| DATA
+    REC_SRV -.->|Caché Local| PREF
+    USR_SRV -.->|Caché Local| PREF
 ```
 
 ### 2.2 ¿Cómo funciona la Navegación por Carpetas (`Expo Router`) y los Grupos `(auth)` y `(app)`?
@@ -143,9 +149,9 @@ A continuación relacionamos cada requisito pedido en las especificaciones con l
   - Si estás en **Web**, guarda el token en `localStorage.setItem('auth_token', token)`.
   - Si estás en **Android o iOS (Expo Go)**, `localStorage` no existe, así que usa el llavero encriptado nativo del teléfono: `await SecureStore.setItemAsync('auth_token', token)`.
 - **¿Dónde están guardados los usuarios registrados?**
-  En [preferencesStorage.ts](file:///c:/Users/manue/Documents/React/GastroLab/src/utils/preferencesStorage.ts#L20-L26) se inicializa la cuenta por defecto:
+  En [`src/data/users.json`](file:///c:/Users/manue/Documents/React/GastroLab/src/data/users.json) (y como respaldo sin conexión `DEFAULT_LOCAL_USERS` en [preferencesStorage.ts](file:///c:/Users/manue/Documents/React/GastroLab/src/utils/preferencesStorage.ts#L20-L26)) vive la cuenta inicial:
   - **Correo:** `admin@gastrolab.com` | **Contraseña:** `1234`
-  - Cuando registras una cuenta nueva en [register.tsx](file:///c:/Users/manue/Documents/React/GastroLab/src/app/%28auth%29/register.tsx#L49), la función [`registerUser()`](file:///c:/Users/manue/Documents/React/GastroLab/src/utils/auth.ts#L28-L51) verifica que el correo no esté repetido, le asigna el siguiente ID (`nextId`) y lo guarda permanentemente con `saveLocalUsers(users)`.
+  - Cuando registras una cuenta nueva en [register.tsx](file:///c:/Users/manue/Documents/React/GastroLab/src/app/%28auth%29/register.tsx#L49), la función [`registerUser()`](file:///c:/Users/manue/Documents/React/GastroLab/src/utils/auth.ts#L45-L76) llama a `POST /api/users` en `server.js` para guardarlo en `users.json` (validando que el correo no esté repetido), y mantiene respaldo en `saveLocalUsers(users)` si el servidor local no estuviera encendido.
 
 ---
 
@@ -164,9 +170,9 @@ A continuación relacionamos cada requisito pedido en las especificaciones con l
 
 ### 3.3 Catálogo, Adaptador de Tipos, Búsqueda, Filtros y Paginación (`home.tsx` y `recipes.ts`)
 
-1. **El Adaptador de Datos (`adaptRecipeDtoToItem` en [recipes.ts](file:///c:/Users/manue/Documents/React/GastroLab/src/services/recipes.ts#L16-L51)):**
+1. **El Adaptador de Datos (`adaptRecipeDtoToItem` en [recipes.ts](file:///c:/Users/manue/Documents/React/GastroLab/src/services/recipes.ts#L19-L54)):**
    - Igual que el profesor creó `adaptProductToCardItems` en su proyecto, nosotros tenemos `adaptRecipeDtoToItem(raw: RawRecipeDto): RecipeItem`.
-   - Toma cada una de las 30 recetas de [recipesData.ts](file:///c:/Users/manue/Documents/React/GastroLab/src/data/recipesData.ts) y garantiza que `id` y `likeRate` sean siempre `number`, que `image` tenga una URL válida (o ponga `DEFAULT_RECIPE_IMAGE` si viniera vacía) y que `prepareTime` tenga formato `HH:MM:SS`.
+   - Toma cada receta proveniente de [`src/data/recipes.json`](file:///c:/Users/manue/Documents/React/GastroLab/src/data/recipes.json) (vía `server.js`) o del respaldo [`recipesData.ts`](file:///c:/Users/manue/Documents/React/GastroLab/src/data/recipesData.ts) y garantiza que `id` y `likeRate` sean siempre `number`, que `image` tenga una URL válida (o ponga `DEFAULT_RECIPE_IMAGE` si viniera vacía) y que `prepareTime` tenga formato `HH:MM:SS`.
 2. **Búsqueda y Filtros Combinados ([home.tsx](file:///c:/Users/manue/Documents/React/GastroLab/src/app/%28app%29/home.tsx#L140-L186)):**
    - En el estado `filters` guardamos: `searchQuery` (texto buscado), `category` (`'Todas'`, `'Mexicanas'`, `'Italianas'`, `'Estadounidenses'`, `'Orientales'`, `'Saludables'`, `'Postres'`), `difficulty` (`'Todas'`, `'Muy facil'`, `'Facil'`, `'Medio'`, `'Dificil'`), `sortBy` y `onlyFavorites`.
    - Dentro de `filteredRecipes = useMemo(...)`, cada receta pasa por 4 embudos seguidos:
@@ -280,12 +286,12 @@ Hacer estos 5 pequeños experimentos de 2 minutos te dará total seguridad sobre
 - **Qué hacer:** Entra a la app, toca **`+ Nueva receta`**, deja el título con solo 2 letras (ej. `"Ab"`), escribe en Tiempo `"99:99:99"` y en Aprobación escribe `"150"`. Presiona **`Guardar receta`**.
 - **Qué observarás:** Verás cómo [`validateRecipeForm`](file:///c:/Users/manue/Documents/React/GastroLab/src/utils/validators.ts#L60-L143) detiene el guardado, marca los bordes en rojo (`styles.inputError`) y muestra debajo de cada campo el motivo exacto del error en español latino.
 
-### Experimento 4: Verificar el ciclo completo CRUD + Persistencia + Reset
+### Experimento 4: Verificar el ciclo completo CRUD con `server.js` y `recipes.json`
 - **Qué hacer:**
-  1. Entra a la receta #1 (*"Un manjar de italia: la pizza"*), toca **Editar**, cámbiale el título a *"Pizza Margarita Especial"* y guarda.
-  2. Verifica que en Detalle y en el Catálogo ahora dice *"Pizza Margarita Especial"*.
-  3. Recarga la página o cierra y vuelve a abrir la app: verás que **tu cambio sigue ahí** (gracias al `gastrolab_crud_overlay` en [preferencesStorage.ts](file:///c:/Users/manue/Documents/React/GastroLab/src/utils/preferencesStorage.ts#L242-L275)).
-  4. Ahora ve a **⚙️ Ajustes** y presiona **`Restablecer datos locales de prueba`**. Regresa al catálogo y verás que volvió a llamarse *"Un manjar de italia: la pizza"*.
+  1. Inicia el microservicio JSON con `npm run server` y abre [`src/data/recipes.json`](file:///c:/Users/manue/Documents/React/GastroLab/src/data/recipes.json) en tu editor.
+  2. Entra a la receta #1 (*"Un manjar de italia: la pizza"*), toca **Editar**, cámbiale el título a *"Pizza Margarita Especial"* y presiona **`Actualizar receta`**.
+  3. Verifica que en **Detalle**, en el **Catálogo** y físicamente dentro de **`src/data/recipes.json`** ahora dice *"Pizza Margarita Especial"*.
+  4. Crea una receta nueva (con foto de galería o URL) y luego elimínala desde el detalle: observa cómo **`recipes.json`** agrega y elimina el objeto en tiempo real. Si apagas `server.js`, la app sigue operando sin fallar usando la caché local de [preferencesStorage.ts](file:///c:/Users/manue/Documents/React/GastroLab/src/utils/preferencesStorage.ts).
 
 ### Experimento 5: Probar el Diseño Responsivo y Desbloqueo de Orientación
 - **Qué hacer:** Abre el catálogo en tu celular con Expo Go (o en el navegador web reduciendo y ampliando el ancho de la ventana).

@@ -1,8 +1,8 @@
 # 03 — Modelos de Datos, Adaptadores de Tipos y Reglas de Validación
 
-## 1. Esquema de Datos del Catálogo Local (`src/data/recipesData.ts`)
+## 1. Esquema de Datos del Catálogo (`src/data/recipes.json`)
 
-Cada uno de los 30 registros embebidos en `INITIAL_RECIPES_DATA` tiene la siguiente estructura:
+Cada registro almacenado en `src/data/recipes.json` (y en el respaldo `INITIAL_RECIPES_DATA`) tiene la siguiente estructura:
 
 ```json
 {

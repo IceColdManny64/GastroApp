@@ -34,6 +34,7 @@
   },
   "scripts": {
     "server": "node server.js",
+    "test": "node --test tests/gastrolab.test.mjs",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",

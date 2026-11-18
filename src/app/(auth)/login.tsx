@@ -2,7 +2,6 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,6 +13,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { updateCredentials, verifyEmail } from '@/services/user';
+import { showAlert } from '@/utils/alerts';
 import { login } from '@/utils/auth';
 import { useThemeMode } from '@/utils/preferencesStorage';
 import { getToken, saveToken } from '@/utils/tokenStorage';
@@ -54,7 +54,7 @@ export default function LoginScreen() {
     if (!validation.isValid) {
       const msg = validation.errorMessage || 'Verifica los datos ingresados.';
       setErrorMessage(msg);
-      Alert.alert('Datos incompletos', msg);
+      showAlert('Datos incompletos', msg);
       return;
     }
 
@@ -67,7 +67,7 @@ export default function LoginScreen() {
       const msg =
         err instanceof Error ? err.message : 'Correo o contraseña incorrectos';
       setErrorMessage(msg);
-      Alert.alert('Error', 'Correo o contraseña incorrectos');
+      showAlert('Error', 'Correo o contraseña incorrectos');
     } finally {
       setLoading(false);
     }
@@ -112,7 +112,7 @@ export default function LoginScreen() {
         setVerifiedUserId(null);
         setNewPassword('');
         setShowRecovery(false);
-        Alert.alert(
+        showAlert(
           'Contraseña actualizada',
           'Tu contraseña se actualizó con éxito. Inicia sesión con tu nueva clave.'
         );
