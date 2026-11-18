@@ -1,9 +1,12 @@
 import { INITIAL_RECIPES_DATA } from '../data/recipesData';
 import { RecipeItem, RawRecipeDto, RecipeFormPayload } from '../types/RecipeItem';
-import { getCrudOverlay, saveCrudOverlay } from '../utils/preferencesStorage';
+import { ApiError, apiRequest } from '../utils/api';
+import {
+  getLocalRecipes,
+  removeFavorite,
+  saveLocalRecipes,
+} from '../utils/preferencesStorage';
 import { getToken } from '../utils/tokenStorage';
-
-const LOCAL_SERVER_URL = 'http://localhost:3001/api/recipes';
 
 export const DEFAULT_RECIPE_IMAGE =
   'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80';
@@ -52,241 +55,183 @@ export const adaptRecipeDtoToItem = (raw: RawRecipeDto): RecipeItem => {
   };
 };
 
-// Sincronizador de fondo con server.js para escribir en recipes.json
-async function syncWithLocalJsonServer(
-  method: 'POST' | 'PUT' | 'DELETE',
-  data?: unknown,
-  id?: number
-): Promise<void> {
-  try {
-    const url = id ? `${LOCAL_SERVER_URL}/${id}` : LOCAL_SERVER_URL;
-    const res = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: data ? JSON.stringify(data) : undefined,
-    });
-    if (res.ok) {
-      console.log(`[recipes.ts] Sincronización exitosa con recipes.json (${method})`);
-    }
-  } catch (_e) {
-    // Si el server local no está corriendo en ese momento, continúa sin bloquear la app
-    console.log('[recipes.ts] Servidor local no conectado, cambio guardado en almacenamiento local.');
+function toServerRecipeBody(payload: RecipeFormPayload) {
+  const cleanImage = payload.imageUri.trim() || DEFAULT_RECIPE_IMAGE;
+  return {
+    title: payload.title.trim(),
+    description: payload.description.trim(),
+    imageURL: cleanImage,
+    preparetime: payload.prepareTime.trim(),
+    likerate: Math.round(Number(payload.likeRate)),
+    category: payload.category.trim(),
+    difficulty: payload.difficulty.trim(),
+  };
+}
+
+function filterBySearch(items: RecipeItem[], search?: string): RecipeItem[] {
+  const normalized = search?.trim().toLowerCase() || '';
+  if (!normalized) return items;
+
+  return items.filter(
+    (recipe) =>
+      recipe.title.toLowerCase().includes(normalized) ||
+      recipe.description.toLowerCase().includes(normalized) ||
+      recipe.category.toLowerCase().includes(normalized)
+  );
+}
+
+async function getOfflineSeededRecipes(): Promise<RecipeItem[]> {
+  const cached = await getLocalRecipes();
+  if (cached && cached.length > 0) {
+    return cached;
   }
+  const seeded = INITIAL_RECIPES_DATA.map(adaptRecipeDtoToItem);
+  await saveLocalRecipes(seeded);
+  return seeded;
 }
 
 export async function getRecipes(search?: string): Promise<RecipeItem[]> {
   await ensureAuthenticated();
+  const cleanSearch = search?.trim() || '';
+  const query = cleanSearch ? `?search=${encodeURIComponent(cleanSearch)}` : '';
 
-  // Intenta leer las recetas más frescas desde el servidor local si está activo
-  let currentBase: RawRecipeDto[] = INITIAL_RECIPES_DATA;
   try {
-    const res = await fetch(LOCAL_SERVER_URL);
-    if (res.ok) {
-      const serverRecipes = await res.json();
-      if (Array.isArray(serverRecipes) && serverRecipes.length > 0) {
-        currentBase = serverRecipes;
-      }
+    const serverRecipes = await apiRequest<RawRecipeDto[]>(`/api/recipes${query}`);
+    const adapted = Array.isArray(serverRecipes)
+      ? serverRecipes.map(adaptRecipeDtoToItem)
+      : [];
+    if (!cleanSearch) {
+      await saveLocalRecipes(adapted);
     }
-  } catch (_e) {
-    // Modo offline/local
-  }
-
-  const overlay = await getCrudOverlay();
-  const deletedSet = new Set(overlay.deletedRecipeIds.map((id) => Number(id)));
-  const normalizedSearch = search?.trim().toLowerCase() || '';
-
-  const baseItems = currentBase.map(adaptRecipeDtoToItem).filter(
-    (item) => !deletedSet.has(Number(item.id))
-  );
-
-  const localItems = overlay.createdRecipes.filter(
-    (item) => !deletedSet.has(Number(item.id))
-  );
-
-  const allItems = [...localItems, ...baseItems].map((item) => {
-    const updated = overlay.updatedRecipesById[String(item.id)];
-    return updated ? { ...item, ...updated, id: item.id } : item;
-  });
-
-  const uniqueMap = new Map<number, RecipeItem>();
-  allItems.forEach((recipe) => {
-    const id = Number(recipe.id);
-    if (!uniqueMap.has(id)) {
-      uniqueMap.set(id, recipe);
+    return adapted;
+  } catch (err) {
+    if (err instanceof ApiError && !err.isNetworkError) {
+      throw err;
     }
-  });
-
-  const uniqueList = Array.from(uniqueMap.values());
-
-  if (!normalizedSearch) {
-    return uniqueList;
+    console.warn('[recipes.ts] Servidor local no disponible, leyendo caché local.');
+    const offline = await getOfflineSeededRecipes();
+    return filterBySearch(offline, cleanSearch);
   }
-
-  return uniqueList.filter((recipe) => {
-    return (
-      recipe.title.toLowerCase().includes(normalizedSearch) ||
-      recipe.description.toLowerCase().includes(normalizedSearch) ||
-      recipe.category.toLowerCase().includes(normalizedSearch)
-    );
-  });
 }
 
 export async function getRecipe(id: number): Promise<RecipeItem> {
   await ensureAuthenticated();
   const numericId = Number(id);
 
-  // Intenta leer desde el servidor local si está disponible
   try {
-    const res = await fetch(`${LOCAL_SERVER_URL}/${numericId}`);
-    if (res.ok) {
-      const serverRecipe = await res.json();
-      return adaptRecipeDtoToItem(serverRecipe);
+    const serverRecipe = await apiRequest<RawRecipeDto>(`/api/recipes/${numericId}`);
+    return adaptRecipeDtoToItem(serverRecipe);
+  } catch (err) {
+    if (err instanceof ApiError && !err.isNetworkError) {
+      throw new Error(
+        err.status === 404 ? 'No se encontró la receta solicitada.' : err.message
+      );
     }
-  } catch (_e) {
-    // Continuar con búsqueda local
+    const offline = await getOfflineSeededRecipes();
+    const found = offline.find((item) => Number(item.id) === numericId);
+    if (!found) {
+      throw new Error('No se encontró la receta solicitada.');
+    }
+    return found;
   }
-
-  const overlay = await getCrudOverlay();
-  if (overlay.deletedRecipeIds.includes(numericId)) {
-    throw new Error('La receta solicitada fue eliminada.');
-  }
-
-  const createdLocal = overlay.createdRecipes.find(
-    (item) => Number(item.id) === numericId
-  );
-  if (createdLocal) {
-    const updatedLocal = overlay.updatedRecipesById[String(numericId)];
-    return updatedLocal
-      ? { ...createdLocal, ...updatedLocal, id: numericId }
-      : createdLocal;
-  }
-
-  const rawFound = INITIAL_RECIPES_DATA.find(
-    (item) => Number(item.id) === numericId
-  );
-  if (!rawFound) {
-    throw new Error('No se encontró la receta solicitada.');
-  }
-
-  const adapted = adaptRecipeDtoToItem(rawFound);
-  const updatedLocal = overlay.updatedRecipesById[String(numericId)];
-
-  return updatedLocal ? { ...adapted, ...updatedLocal, id: numericId } : adapted;
 }
 
 export async function createRecipe(
-  _formData: FormData,
   payload: RecipeFormPayload
 ): Promise<RecipeItem> {
   await ensureAuthenticated();
+  const body = toServerRecipeBody(payload);
 
-  const cleanImage = payload.imageUri.trim() || DEFAULT_RECIPE_IMAGE;
-  const overlay = await getCrudOverlay();
+  try {
+    const createdDto = await apiRequest<RawRecipeDto>('/api/recipes', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    const created = adaptRecipeDtoToItem(createdDto);
 
-  const maxExistingId = [
-    ...INITIAL_RECIPES_DATA.map((r) => Number(r.id) || 0),
-    ...overlay.createdRecipes.map((r) => Number(r.id) || 0),
-  ].reduce((max, current) => Math.max(max, current), 30);
+    const existing = await getOfflineSeededRecipes();
+    await saveLocalRecipes([
+      created,
+      ...existing.filter((item) => Number(item.id) !== created.id),
+    ]);
 
-  const newRecipe: RecipeItem = {
-    id: maxExistingId + 1,
-    title: payload.title.trim(),
-    description: payload.description.trim(),
-    image: cleanImage,
-    imageURL: cleanImage,
-    prepareTime: payload.prepareTime.trim(),
-    likeRate: Math.round(Number(payload.likeRate)),
-    category: payload.category.trim(),
-    difficulty: payload.difficulty.trim(),
-  };
-
-  overlay.createdRecipes = [newRecipe, ...overlay.createdRecipes];
-  await saveCrudOverlay(overlay);
-
-  // Escribir físicamente en src/data/recipes.json a través de server.js
-  await syncWithLocalJsonServer('POST', {
-    id: newRecipe.id,
-    title: newRecipe.title,
-    description: newRecipe.description,
-    imageURL: newRecipe.image,
-    preparetime: newRecipe.prepareTime,
-    likerate: newRecipe.likeRate,
-    category: newRecipe.category,
-    difficulty: newRecipe.difficulty,
-  });
-
-  console.log('[recipes.ts] Receta creada y sincronizada:', newRecipe.id);
-  return newRecipe;
+    return created;
+  } catch (err) {
+    if (err instanceof ApiError && !err.isNetworkError) {
+      throw err;
+    }
+    console.warn('[recipes.ts] Servidor local no disponible, guardando en caché local.');
+    const existing = await getOfflineSeededRecipes();
+    const maxId = existing.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
+    const localCreated = adaptRecipeDtoToItem({
+      id: maxId + 1,
+      ...body,
+    });
+    await saveLocalRecipes([localCreated, ...existing]);
+    return localCreated;
+  }
 }
 
 export async function updateRecipe(
   id: number,
-  _formData: FormData,
   payload: RecipeFormPayload
 ): Promise<RecipeItem> {
   await ensureAuthenticated();
-
   const numericId = Number(id);
-  const cleanImage = payload.imageUri.trim() || DEFAULT_RECIPE_IMAGE;
+  const body = toServerRecipeBody(payload);
 
-  const updatedItem: RecipeItem = {
-    id: numericId,
-    title: payload.title.trim(),
-    description: payload.description.trim(),
-    image: cleanImage,
-    imageURL: cleanImage,
-    prepareTime: payload.prepareTime.trim(),
-    likeRate: Math.round(Number(payload.likeRate)),
-    category: payload.category.trim(),
-    difficulty: payload.difficulty.trim(),
-  };
+  try {
+    const updatedDto = await apiRequest<RawRecipeDto>(`/api/recipes/${numericId}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+    const updated = adaptRecipeDtoToItem(updatedDto);
 
-  const overlay = await getCrudOverlay();
-  overlay.updatedRecipesById[String(numericId)] = updatedItem;
-  overlay.createdRecipes = overlay.createdRecipes.map((item) =>
-    Number(item.id) === numericId ? updatedItem : item
-  );
-  await saveCrudOverlay(overlay);
+    const existing = await getOfflineSeededRecipes();
+    await saveLocalRecipes(
+      existing.map((item) => (Number(item.id) === numericId ? updated : item))
+    );
 
-  // Escribir físicamente en src/data/recipes.json a través de server.js
-  await syncWithLocalJsonServer(
-    'PUT',
-    {
+    return updated;
+  } catch (err) {
+    if (err instanceof ApiError && !err.isNetworkError) {
+      throw err;
+    }
+    console.warn('[recipes.ts] Servidor local no disponible, actualizando caché local.');
+    const existing = await getOfflineSeededRecipes();
+    const targetExists = existing.some((item) => Number(item.id) === numericId);
+    if (!targetExists) {
+      throw new Error('No se encontró la receta solicitada para actualizar.');
+    }
+    const localUpdated = adaptRecipeDtoToItem({
       id: numericId,
-      title: updatedItem.title,
-      description: updatedItem.description,
-      imageURL: updatedItem.image,
-      preparetime: updatedItem.prepareTime,
-      likerate: updatedItem.likeRate,
-      category: updatedItem.category,
-      difficulty: updatedItem.difficulty,
-    },
-    numericId
-  );
-
-  console.log('[recipes.ts] Receta actualizada y sincronizada:', numericId);
-  return updatedItem;
+      ...body,
+    });
+    await saveLocalRecipes(
+      existing.map((item) => (Number(item.id) === numericId ? localUpdated : item))
+    );
+    return localUpdated;
+  }
 }
 
 export async function deleteRecipe(id: number): Promise<void> {
   await ensureAuthenticated();
-
   const numericId = Number(id);
-  const overlay = await getCrudOverlay();
 
-  if (!overlay.deletedRecipeIds.includes(numericId)) {
-    overlay.deletedRecipeIds.push(numericId);
+  try {
+    await apiRequest(`/api/recipes/${numericId}`, {
+      method: 'DELETE',
+    });
+  } catch (err) {
+    if (err instanceof ApiError && !err.isNetworkError) {
+      throw err;
+    }
+    console.warn('[recipes.ts] Servidor local no disponible, eliminando en caché local.');
   }
-  overlay.createdRecipes = overlay.createdRecipes.filter(
-    (item) => Number(item.id) !== numericId
-  );
-  delete overlay.updatedRecipesById[String(numericId)];
-  await saveCrudOverlay(overlay);
 
-  // Escribir físicamente en src/data/recipes.json a través de server.js
-  await syncWithLocalJsonServer('DELETE', undefined, numericId);
-
-  console.log('[recipes.ts] Receta eliminada y sincronizada:', numericId);
+  const existing = await getOfflineSeededRecipes();
+  await Promise.all([
+    saveLocalRecipes(existing.filter((item) => Number(item.id) !== numericId)),
+    removeFavorite(numericId),
+  ]);
 }

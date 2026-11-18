@@ -135,15 +135,19 @@ export default function FavoritesScreen() {
               compact={settings.compactCards || (isLandscape && height < 480)}
               darkMode={isDark}
               onToggleFavorite={() => handleToggleFavorite(item.id)}
-              onPress={() =>
+              onPress={() => {
+                const safeItemParam =
+                  item.image && item.image.startsWith('data:')
+                    ? { ...item, image: '', imageURL: '' }
+                    : item;
                 router.push({
                   pathname: '/details',
                   params: {
                     id: String(item.id),
-                    item: JSON.stringify(item),
+                    item: JSON.stringify(safeItemParam),
                   },
-                })
-              }
+                });
+              }}
             />
           </View>
         )}

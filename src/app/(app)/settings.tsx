@@ -2,7 +2,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -21,6 +20,7 @@ import {
 } from '@/services/user';
 import { PageSizeOption, UserSession, UserSettings } from '@/types/Auth';
 import { RECIPE_CATEGORIES, RecipeCategory } from '@/types/RecipeItem';
+import { showAlert } from '@/utils/alerts';
 import {
   DEFAULT_USER_SETTINGS,
   getUserSettings,
@@ -133,7 +133,7 @@ export default function SettingsScreen() {
     if (!validation.isValid) {
       const msg = validation.errorMessage || 'Verifica los campos ingresados.';
       setCredentialsError(msg);
-      Alert.alert('Datos inválidos', msg);
+      showAlert('Datos inválidos', msg);
       return;
     }
 
@@ -144,7 +144,7 @@ export default function SettingsScreen() {
         const invalidMsg =
           passwordCheck.message || 'La contraseña actual es incorrecta.';
         setCredentialsError(invalidMsg);
-        Alert.alert('Contraseña incorrecta', invalidMsg);
+        showAlert('Contraseña incorrecta', invalidMsg);
         return;
       }
 
@@ -166,14 +166,14 @@ export default function SettingsScreen() {
       const successMsg =
         updateResult.message || 'Credenciales actualizadas correctamente';
       setCredentialsMessage(successMsg);
-      Alert.alert('Éxito', successMsg);
+      showAlert('Éxito', successMsg);
     } catch (err) {
       const msg =
         err instanceof Error
           ? err.message
           : 'No se pudieron actualizar las credenciales.';
       setCredentialsError(msg);
-      Alert.alert('Error', msg);
+      showAlert('Error', msg);
     } finally {
       setUpdatingCredentials(false);
     }
@@ -181,9 +181,9 @@ export default function SettingsScreen() {
 
   const handleResetLocalData = async () => {
     await resetLocalRecipeChanges();
-    Alert.alert(
-      'Catálogo restablecido',
-      'Se han restaurado las 30 recetas originales del catálogo.'
+    showAlert(
+      'Caché restablecida',
+      'Se restableció el respaldo local. Si el servidor JSON está activo, se cargarán los registros actuales de recipes.json.'
     );
   };
 
@@ -430,11 +430,11 @@ export default function SettingsScreen() {
             />
 
             <Text style={[styles.label, isDark && styles.textDark]}>
-              Nueva contraseña *
+              Nueva contraseña (opcional)
             </Text>
             <TextInput
               style={[styles.input, isDark && styles.inputDark]}
-              placeholder="Mínimo 4 caracteres"
+              placeholder="Dejar vacío para conservar la actual (mín. 4 caracteres)"
               placeholderTextColor={isDark ? '#8D7B75' : '#888888'}
               secureTextEntry
               autoCapitalize="none"

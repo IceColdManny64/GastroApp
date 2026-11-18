@@ -2,7 +2,7 @@
 
 ## 1. Visión General y Stack Oficial
 
-**GastroLab** es una aplicación móvil y web multiplataforma 100% Frontend para explorar un catálogo de 30 recetas de cocina con sus imágenes originales por URL, gestionar platillos (CRUD completo con fotografías), administrar favoritos y configurar preferencias y credenciales del usuario con persistencia local multiplataforma.
+**GastroLab** es una aplicación móvil y web multiplataforma construida con Expo/React Native conectada a un microservicio local mínimo en Node.js (`server.js`) que lee y escribe directamente archivos JSON en disco (`src/data/recipes.json` y `src/data/users.json`), con respaldo automático en el almacenamiento local del dispositivo.
 
 - **Ruta de Desarrollo Obligatoria:** `/GastroLab`
 - **Configuración de `package.json` Base (Expo SDK 58):**
@@ -34,7 +34,7 @@
       "react-native-reanimated": "4.7.1",
       "react-native-safe-area-context": "~5.11.1",
       "react-native-screens": "~4.30.1",
-      "react-native-web": "~0.21.0",
+      "react-native-web": "^0.21.4",
       "react-native-worklets": "0.13.0"
     },
     "devDependencies": {
@@ -42,6 +42,8 @@
       "typescript": "~6.0.3"
     },
     "scripts": {
+      "server": "node server.js",
+      "test": "node --test tests/gastrolab.test.mjs",
       "start": "expo start",
       "android": "expo start --android",
       "ios": "expo start --ios",
@@ -61,8 +63,11 @@ Todo el código fuente debe ubicarse dentro de `/GastroLab/src/` utilizando los 
 ```text
 /GastroLab
 ├── app.json                         # Configuración de Expo SDK 58 (orientation: "default")
-├── package.json                     # Dependencias Expo SDK 58
+├── package.json                     # Dependencias Expo SDK 58 y scripts ("server", "test", "start")
+├── server.js                        # Microservicio local HTTP mínimo sobre recipes.json y users.json
 ├── tsconfig.json                    # Configuración de TypeScript con alias "@/*": ["./src/*"]
+├── tests/
+│   └── gastrolab.test.mjs           # Suite automatizada de pruebas CRUD, validadores, adaptador y offline
 └── src/
     ├── app/                         # Pantallas y grupos de rutas de Expo Router
     │   ├── _layout.tsx              # RootLayout con SplashScreen.preventAutoHideAsync(), SafeAreaProvider y Stack
@@ -70,7 +75,7 @@ Todo el código fuente debe ubicarse dentro de `/GastroLab/src/` utilizando los 
     │   ├── (auth)/                  # Grupo de rutas públicas de autenticación
     │   │   ├── _layout.tsx          # AuthLayout
     │   │   ├── login.tsx            # LoginScreen (Inicio de sesión)
-    │   │   └── register.tsx         # RegisterScreen (Registro local de nuevos usuarios)
+    │   │   └── register.tsx         # RegisterScreen (Registro de nuevos usuarios)
     │   └── (app)/                   # Grupo de rutas protegidas de la aplicación
     │       ├── _layout.tsx          # AppLayout (Verifica token y redirige a /(auth)/login si no hay sesión)
     │       ├── home.tsx             # HomeScreen (Catálogo principal, búsqueda, filtros y paginación)
@@ -84,18 +89,22 @@ Todo el código fuente debe ubicarse dentro de `/GastroLab/src/` utilizando los 
     │       ├── searchFilterBar.tsx  # Barra de búsqueda y chips de filtrado/ordenamiento
     │       └── paginationBar.tsx    # Selector de 10/20/30 elementos por página y navegación
     ├── data/
-    │   └── recipesData.ts           # Catálogo embebido con las 30 recetas originales y sus URLs de imagen
+    │   ├── recipes.json             # Base de datos JSON física de recetas (leída y escrita por server.js)
+    │   ├── users.json               # Base de datos JSON física de usuarios (leída y escrita por server.js)
+    │   └── recipesData.ts           # Respaldo estático de 30 recetas para modo sin conexión (sin server.js)
     ├── services/
-    │   ├── recipes.ts               # Funciones CRUD del dominio (getRecipes, getRecipe, createRecipe, updateRecipe, deleteRecipe)
-    │   └── user.ts                  # Funciones de perfil y credenciales locales (getUserProfile, verifyPassword, updateCredentials)
+    │   ├── recipes.ts               # Funciones CRUD del dominio contra server.js + caché local simple
+    │   └── user.ts                  # Funciones de perfil y credenciales contra /api/users + respaldo local
     ├── types/
-    │   ├── RecipeItem.ts            # Interfaces RecipeItem, RawRecipeDto, RecipeFilterState
+    │   ├── RecipeItem.ts            # Interfaces RecipeItem, RawRecipeDto, RecipeFormPayload, RecipeFilterState
     │   └── Auth.ts                  # Interfaces AuthResponse, UserSession, UserSettings
     └── utils/
-        ├── api.ts                   # Helper local fetchWithAuth<T>() con verificación de token activo
-        ├── auth.ts                  # Funciones locales login() y registerUser()
-        ├── tokenStorage.ts          # Funciones isWebStorageAvailable(), saveToken(), getToken(), deleteToken()
-        ├── preferencesStorage.ts    # Persistencia de usuarios, favoritos, overlay CRUD y settings
+        ├── alerts.ts                # Helper multiplataforma showAlert() y confirmAction() (Web y Móvil)
+        ├── api.ts                   # Cliente HTTP ligero apiRequest<T>() y getApiBaseUrl() hacia puerto 3001
+        ├── auth.ts                  # Funciones login() y registerUser() contra /api/users + respaldo local
+        ├── navigation.ts            # safeGoBack() para evitar errores GO_BACK sin historial previo
+        ├── tokenStorage.ts          # isWebStorageAvailable(), saveToken(), getToken(), deleteToken()
+        ├── preferencesStorage.ts    # Favoritos, settings, tema reactivo (useThemeMode) y caché local simple
         └── validators.ts            # Validaciones de formularios y verificación de tipos de datos
 ```
 

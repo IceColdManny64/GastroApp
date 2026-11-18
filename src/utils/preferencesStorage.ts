@@ -1,7 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
-import defaultUsersRaw from '@/data/users.json';
 import { UserSettings } from '@/types/Auth';
 import { RecipeItem } from '@/types/RecipeItem';
 import { getUserSession } from './tokenStorage';
@@ -9,7 +8,7 @@ import { getUserSession } from './tokenStorage';
 const FAVORITES_PREFIX = 'gastrolab_favorites_';
 const SETTINGS_PREFIX = 'gastrolab_settings_';
 const GLOBAL_THEME_KEY = 'gastrolab_global_theme';
-const CRUD_OVERLAY_KEY = 'gastrolab_crud_overlay';
+const LOCAL_RECIPES_KEY = 'gastrolab_local_recipes';
 const USERS_STORAGE_KEY = 'gastrolab_local_users';
 
 export interface LocalUserRecord {
@@ -18,13 +17,13 @@ export interface LocalUserRecord {
   password: string;
 }
 
-const DEFAULT_LOCAL_USERS: LocalUserRecord[] = defaultUsersRaw as unknown as LocalUserRecord[];
-
-export interface CrudOverlayState {
-  createdRecipes: RecipeItem[];
-  updatedRecipesById: Record<string, RecipeItem>;
-  deletedRecipeIds: number[];
-}
+export const DEFAULT_LOCAL_USERS: LocalUserRecord[] = [
+  {
+    id: 1,
+    email: 'admin@gastrolab.com',
+    password: '1234',
+  },
+];
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   itemsPerPage: 10,
@@ -166,6 +165,15 @@ export async function toggleFavorite(recipeId: number): Promise<number[]> {
   return updated;
 }
 
+export async function removeFavorite(recipeId: number): Promise<void> {
+  const suffix = await getUserKeySuffix();
+  const current = await getFavorites();
+  const numericId = Number(recipeId);
+  if (!current.includes(numericId)) return;
+  const updated = current.filter((id) => id !== numericId);
+  await writeStorageItem(`${FAVORITES_PREFIX}${suffix}`, JSON.stringify(updated));
+}
+
 export async function getUserSettings(): Promise<UserSettings> {
   const suffix = await getUserKeySuffix();
   const [raw, globalTheme] = await Promise.all([
@@ -254,43 +262,24 @@ export function useThemeMode(): boolean {
   return mode === 'dark';
 }
 
-export async function getCrudOverlay(): Promise<CrudOverlayState> {
-  const raw = await readStorageItem(CRUD_OVERLAY_KEY);
-  if (!raw) {
-    return {
-      createdRecipes: [],
-      updatedRecipesById: {},
-      deletedRecipeIds: [],
-    };
-  }
+export async function getLocalRecipes(): Promise<RecipeItem[] | null> {
+  const raw = await readStorageItem(LOCAL_RECIPES_KEY);
+  if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as Partial<CrudOverlayState>;
-    return {
-      createdRecipes: Array.isArray(parsed.createdRecipes) ? parsed.createdRecipes : [],
-      updatedRecipesById:
-        parsed.updatedRecipesById && typeof parsed.updatedRecipesById === 'object'
-          ? parsed.updatedRecipesById
-          : {},
-      deletedRecipeIds: Array.isArray(parsed.deletedRecipeIds)
-        ? parsed.deletedRecipeIds.map((id) => Number(id))
-        : [],
-    };
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as RecipeItem[]) : null;
   } catch (err) {
-    console.warn('[preferencesStorage.ts] Error parseando overlay CRUD:', err);
-    return {
-      createdRecipes: [],
-      updatedRecipesById: {},
-      deletedRecipeIds: [],
-    };
+    console.warn('[preferencesStorage.ts] Error parseando recetas locales:', err);
+    return null;
   }
 }
 
-export async function saveCrudOverlay(overlay: CrudOverlayState): Promise<void> {
-  await writeStorageItem(CRUD_OVERLAY_KEY, JSON.stringify(overlay));
+export async function saveLocalRecipes(recipes: RecipeItem[]): Promise<void> {
+  await writeStorageItem(LOCAL_RECIPES_KEY, JSON.stringify(recipes));
 }
 
 export async function resetLocalRecipeChanges(): Promise<void> {
-  await removeStorageItem(CRUD_OVERLAY_KEY);
+  await removeStorageItem(LOCAL_RECIPES_KEY);
 }
 
 export async function getLocalUsers(): Promise<LocalUserRecord[]> {

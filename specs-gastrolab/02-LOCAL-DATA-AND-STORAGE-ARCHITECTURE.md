@@ -1,21 +1,23 @@
-# 02 — Arquitectura de Datos Locales (30 Recetas Originales) y Persistencia Frontend
+# 02 — Arquitectura del Microservicio JSON, Catálogo (30 Recetas) y Respaldo Local
 
-## 1. Visión General de la Capa de Datos 100% Frontend
+## 1. Visión General de la Capa de Datos
 
-**GastroLab** opera íntegramente como una aplicación Frontend autónoma sin depender de ningún servidor externo. Toda la información se gestiona localmente mediante dos capas:
+**GastroLab** utiliza un microservicio local minimalista en Node.js (`server.js`, puerto `3001`, sin dependencias externas) que persiste directamente todos los cambios CRUD en disco sobre dos archivos JSON, manteniendo un respaldo automático en el almacenamiento local del dispositivo para operar incluso sin conexión:
 
-1. **Catálogo Base Embebido (`src/data/recipesData.ts`):**
-   - Contiene los **30 registros originales de recetas** (`INITIAL_RECIPES_DATA`) con sus títulos, descripciones, tiempos de preparación (`preparetime`), porcentajes de aprobación (`likerate`), categorías (`category`), dificultades (`difficulty`) y sus **URLs de imágenes originales (`imageURL`)**.
-2. **Almacenamiento Persistente Multiplataforma (`src/utils/tokenStorage.ts` y `src/utils/preferencesStorage.ts`):**
-   - En **Android / iOS**: Utiliza `expo-secure-store` (con respaldo en memoria).
+1. **Microservicio JSON (`server.js` -> `src/data/recipes.json` y `src/data/users.json`):**
+   - **`src/data/recipes.json`:** Contiene las 30 recetas base y se actualiza físicamente en disco ante cada operación `POST`, `PUT` o `DELETE`.
+   - **`src/data/users.json`:** Almacena las cuentas de usuario (`admin@gastrolab.com` / `1234` por defecto) y se actualiza físicamente al registrar nuevos usuarios (`POST /api/users`) o actualizar correo/contraseña (`PUT /api/users/:id`).
+   - **Semilla de respaldo offline (`src/data/recipesData.ts`):** Exporta `INITIAL_RECIPES_DATA` como arreglo estático de solo lectura para inicializar la app si `server.js` está apagado. (Al no importar `recipes.json` ni `users.json` directamente desde el bundler de Expo, se evitan recargas de Metro cuando `server.js` escribe en disco).
+2. **Almacenamiento Local y Caché del Dispositivo (`src/utils/tokenStorage.ts` y `src/utils/preferencesStorage.ts`):**
+   - En **Android / iOS**: Utiliza `expo-secure-store` (con chunking automático y respaldo en memoria).
    - En **Web**: Utiliza `localStorage` (con respaldo en memoria).
-   - Persiste cuentas de usuario locales, la sesión activa (`token` + `UserSession`), la lista de favoritos por usuario, las preferencias de configuración (`UserSettings`) y el overlay de cambios CRUD (`createdRecipes`, `updatedRecipesById`, `deletedRecipeIds`).
+   - Persiste el token/sesión (`UserSession`), favoritos por usuario, preferencias (`UserSettings`, tema global claro/oscuro) y la caché local (`gastrolab_local_recipes`, `gastrolab_local_users`) usada automáticamente si `server.js` no responde.
 
 ---
 
-## 2. Catálogo Completo de las 30 Recetas (`src/data/recipesData.ts`)
+## 2. Catálogo Completo de las 30 Recetas (`src/data/recipes.json`)
 
-El archivo `src/data/recipesData.ts` debe exportar la constante `INITIAL_RECIPES_DATA: RawRecipeDto[]` con los siguientes 30 registros exactos y sus URLs de imagen:
+El archivo `src/data/recipes.json` contiene los 30 registros iniciales con sus URLs de imagen:
 
 | ID | Título (`title`) | Categoría (`category`) | Dificultad (`difficulty`) | Tiempo (`preparetime`) | Likes (`likerate`) | URL de Imagen (`imageURL`) |
 |---|---|---|---|---|---|---|
@@ -52,51 +54,52 @@ El archivo `src/data/recipesData.ts` debe exportar la constante `INITIAL_RECIPES
 
 ---
 
-## 3. Autenticación y Gestión de Usuarios Local (`src/utils/auth.ts` y `src/services/user.ts`)
+## 3. Autenticación y Gestión de Usuarios (`src/data/users.json`, `src/utils/auth.ts`, `src/services/user.ts`)
 
-### 3.1 Cuenta Predeterminada y Registro Local (`preferencesStorage.ts`)
-- Al iniciar la aplicación por primera vez, el almacenamiento local inicializa una lista de usuarios (`DEFAULT_LOCAL_USERS`) con una cuenta predeterminada lista para usar:
+### 3.1 Cuenta Predeterminada y Registro en `users.json`
+- El archivo `src/data/users.json` inicia con una cuenta administradora lista para usar:
   - **Correo:** `admin@gastrolab.com`
   - **Contraseña:** `1234`
-- Cualquier usuario nuevo registrado en `/register` se agrega de forma persistente a la colección local mediante `saveLocalUsers(users)`.
+- Cualquier usuario nuevo registrado en `/(auth)/register` envía `POST /api/users` a `server.js`, validando que el correo no esté repetido (`409`) y guardándolo físicamente en `src/data/users.json` (con respaldo automático en `gastrolab_local_users` si `server.js` no está activo).
 
 ### 3.2 Flujo de Login (`login` en `src/utils/auth.ts`)
-- Busca coincidencia exacta de `email` (case-insensitive) y `password` en `getLocalUsers()`.
-- Si las credenciales son válidas, genera un token de sesión (`gastrolab-session-${user.id}-${Date.now()}`), lo persiste mediante `saveToken(token)` y `saveUserSession({ id: user.id, email: user.email, token })`, y retorna el token.
-- Si no coinciden, lanza un `Error('Credenciales inválidas. Verifica tu correo y contraseña.')`.
+- Obtiene los usuarios desde `GET /api/users` (o `getLocalUsers()` en modo sin conexión) y busca coincidencia de `email` (case-insensitive) y `password`.
+- Si las credenciales son válidas, genera un token de sesión (`gastrolab-token-${user.id}-${Date.now()}`), lo persiste mediante `saveUserSession({ id: user.id, email: user.email, token })`, y retorna el token.
+- Si no coinciden, lanza un `Error('Correo o contraseña incorrectos')`.
 
 ### 3.3 Flujo de Perfil y Cambio de Credenciales (`src/services/user.ts`)
-- **`getUserProfile(userId)`:** Devuelve `{ id, email }` del usuario almacenado localmente.
-- **`verifyPassword(userId, currentPassword)`:** Comprueba que la contraseña actual coincida con la del usuario antes de permitir actualizar credenciales en `/settings`.
-- **`updateCredentials(userId, newEmail, newPassword)`:** Actualiza el correo y la contraseña en `getLocalUsers()` y sincroniza la sesión activa (`saveUserSession`).
+- **`getUserProfile(userId)`:** Consulta `GET /api/users/:id` (o caché local) y devuelve `{ id, email }`.
+- **`verifyPassword(userId, currentPassword)`:** Comprueba que la contraseña actual coincida antes de actualizar credenciales en `/settings`.
+- **`updateCredentials(userId, newEmail, newPassword)`:** Envía `PUT /api/users/:id` a `server.js` para actualizar correo y contraseña directamente en `src/data/users.json` (verificando unicidad de correo) y sincroniza la sesión activa (`saveUserSession`).
 
 ---
 
-## 4. Motor CRUD Local sobre las 30 Recetas (`src/services/recipes.ts`)
+## 4. Microservicio REST y Motor CRUD (`server.js` + `src/services/recipes.ts`)
 
-Para que todas las operaciones CRUD (Crear, Leer, Actualizar y Eliminar) funcionen de forma inmediata, persistente y reversible sin servidor externo, `src/services/recipes.ts` combina `INITIAL_RECIPES_DATA` con `RecipeCrudOverlay` almacenado en `preferencesStorage.ts`:
+El microservicio `server.js` expone dos grupos de endpoints REST sumamente simples sobre `src/data/recipes.json` y `src/data/users.json` (`GET`, `POST`, `PUT`, `DELETE`):
 
-```typescript
-export interface RecipeCrudOverlay {
-  createdRecipes: RecipeItem[];
-  updatedRecipesById: Record<number, RecipeItem>;
-  deletedRecipeIds: number[];
-}
-```
+| Recurso | Endpoint | Función | Archivo físico modificado |
+|---|---|---|---|
+| **Salud** | `GET /health` | Verifica estado y conteos actuales | — |
+| **Recetas** | `GET /api/recipes` | Lista recetas (acepta `?search=`) | Lee `src/data/recipes.json` |
+| **Recetas** | `GET /api/recipes/:id` | Obtiene detalle por ID (o `404`) | Lee `src/data/recipes.json` |
+| **Recetas** | `POST /api/recipes` | Crea receta nueva al inicio con `id = max + 1` | Escribe `src/data/recipes.json` |
+| **Recetas** | `PUT /api/recipes/:id` | Actualiza campos de una receta (o `404`) | Escribe `src/data/recipes.json` |
+| **Recetas** | `DELETE /api/recipes/:id` | Elimina la receta por ID (o `404`) | Escribe `src/data/recipes.json` |
+| **Usuarios** | `GET /api/users`, `GET /api/users/:id` | Consulta cuentas de usuario | Lee `src/data/users.json` |
+| **Usuarios** | `POST /api/users` | Registra usuario nuevo (valida duplicados `409`) | Escribe `src/data/users.json` |
+| **Usuarios** | `PUT /api/users/:id` | Actualiza correo y/o contraseña (valida `409`) | Escribe `src/data/users.json` |
 
+### Flujo en `src/services/recipes.ts`:
 1. **Lectura del Catálogo (`getRecipes(search?)`):**
-   - Parte de las 30 recetas de `INITIAL_RECIPES_DATA` normalizadas con `adaptRecipeDtoToItem`.
-   - Filtra cualquier receta cuyo `id` esté en `overlay.deletedRecipeIds`.
-   - Sustituye cualquier receta cuyo `id` exista en `overlay.updatedRecipesById`.
-   - Antepone las recetas creadas por el usuario (`overlay.createdRecipes`).
-   - Si se proporciona el parámetro `search`, filtra por coincidencia en `title`, `description`, `category` o `difficulty`.
+   - Llama `GET /api/recipes` (con `?search=` opcional), normaliza con `adaptRecipeDtoToItem` y guarda copia en `gastrolab_local_recipes`. Si hay error de red (`isNetworkError`), lee la caché local `getLocalRecipes()` (sembrada desde `INITIAL_RECIPES_DATA`).
 2. **Detalle de Receta (`getRecipe(id)`):**
-   - Busca la receta en el catálogo fusionado y lanza un error descriptivo en español si no existe o fue eliminada.
-3. **Creación (`createRecipe(formData, payload)`):**
-   - Genera un nuevo `id` numérico incremental (`maxId + 1`), construye el `RecipeItem` con la imagen seleccionada (o URL ingresada) y lo guarda en `overlay.createdRecipes`.
-4. **Actualización (`updateRecipe(id, formData, payload)`):**
-   - Actualiza el registro en `overlay.createdRecipes` (si fue creado por el usuario) o en `overlay.updatedRecipesById[id]` (si es una de las 30 recetas originales).
+   - Llama `GET /api/recipes/:id`. Si recibe `404` del servidor, lanza `'No se encontró la receta solicitada.'` sin ocultar errores reales.
+3. **Creación (`createRecipe(payload)`):**
+   - Envía JSON a `POST /api/recipes` y recibe el registro ya guardado en `src/data/recipes.json` con su `id` asignado por el servidor (evitando colisiones de ID).
+4. **Actualización (`updateRecipe(id, payload)`):**
+   - Envía JSON a `PUT /api/recipes/:id`, actualiza `src/data/recipes.json` en disco y refresca la caché local. Si el servidor devuelve `404`/`400`, propaga el error.
 5. **Eliminación (`deleteRecipe(id)`):**
-   - Agrega el `id` a `overlay.deletedRecipeIds` y lo remueve de `createdRecipes` y `updatedRecipesById`.
-6. **Restablecimiento de Datos Originales (`clearCrudOverlay()`):**
-   - Disponible desde `/settings`, limpia el overlay para restaurar instantáneamente las 30 recetas originales intactas.
+   - Envía `DELETE /api/recipes/:id`, remueve la receta de `src/data/recipes.json`, limpia la caché local y elimina el ID de favoritos con `removeFavorite(id)`.
+6. **Restablecimiento de Caché Local (`resetLocalRecipeChanges()`):**
+   - Disponible desde `/settings`, limpia la caché offline (`gastrolab_local_recipes`) para forzar lectura fresca desde `recipes.json` o restaurar las 30 recetas base en modo sin conexión.
