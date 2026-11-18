@@ -27,32 +27,21 @@ import {
 } from '@/utils/preferencesStorage';
 
 export default function DetailScreen() {
-  const { id, item: itemString } = useLocalSearchParams<{
+  const { id } = useLocalSearchParams<{
     id?: string;
     item?: string;
   }>();
 
-  const initialItem: RecipeItem | null = useMemo(() => {
-    if (!itemString) return null;
-    try {
-      return JSON.parse(itemString) as RecipeItem;
-    } catch {
-      return null;
-    }
-  }, [itemString]);
-
-  const [recipe, setRecipe] = useState<RecipeItem | null>(initialItem);
+  const [recipe, setRecipe] = useState<RecipeItem | null>(null);
   const router = useRouter();
   const isDarkTheme = useThemeMode();
   const { width, height } = useWindowDimensions();
   const isWideLayout = width >= 660 || (width > height && width >= 560);
 
-  const [loading, setLoading] = useState<boolean>(!initialItem);
+  const [loading, setLoading] = useState<boolean>(true);
   const [isFavorite, setIsFavorite] = useState(false);
   const [darkMode, setDarkMode] = useState(isDarkTheme);
-  const [imageUri, setImageUri] = useState<string>(
-    initialItem?.image || DEFAULT_RECIPE_IMAGE
-  );
+  const [imageUri, setImageUri] = useState<string>(DEFAULT_RECIPE_IMAGE);
 
   const isDark = isDarkTheme || darkMode;
 
@@ -62,10 +51,9 @@ export default function DetailScreen() {
 
       (async () => {
         try {
-          if (!initialItem) {
-            setLoading(true);
-          }
-          const numericId = Number(id ?? initialItem?.id);
+          const numericId = Number(id);
+          if (!numericId) return;
+
           const [fresh, favs, settings] = await Promise.all([
             getRecipe(numericId),
             getFavorites(),
@@ -80,9 +68,7 @@ export default function DetailScreen() {
           }
         } catch (err) {
           console.error('[details.tsx] Error al cargar detalle:', err);
-          if (!initialItem) {
-            Alert.alert('Error', 'No se pudo cargar la receta');
-          }
+          Alert.alert('Error', 'No se pudo cargar la receta');
         } finally {
           if (isActive) setLoading(false);
         }
@@ -91,7 +77,7 @@ export default function DetailScreen() {
       return () => {
         isActive = false;
       };
-    }, [id, initialItem])
+    }, [id])
   );
 
   const handleToggleFavorite = async () => {
