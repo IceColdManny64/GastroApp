@@ -1,11 +1,21 @@
 [
   {
+    "id": 31,
+    "title": "pollo transexual al limite gay",
+    "description": "pollo trans al limite",
+    "imageURL": "blob:http://localhost:8081/bd18ae6c-59c2-4947-af1b-8b56c3d16549",
+    "preparetime": "00:30:00",
+    "likerate": 90,
+    "category": "Mexicanas",
+    "difficulty": "Facil"
+  },
+  {
     "id": 1,
-    "title": "Un manjar de italia: la pizza",
+    "title": "Pizza Margarita Autentica de Italia",
     "description": "Descubre algo mas sobre este manjar!",
     "imageURL": "https://assets.tmecosys.com/image/upload/t_web_rdp_recipe_584x480_1_5x/img/recipe/ras/Assets/48a49653c8716457eb0b2f7eb3c7d74c/Derivates/8d83d9ed4567fa15456d8eec7557e60006a15576.jpg",
     "preparetime": "01:00:00",
-    "likerate": 90,
+    "likerate": 95,
     "category": "Italianas",
     "difficulty": "Facil"
   },
