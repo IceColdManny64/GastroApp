@@ -1,7 +1,7 @@
 # Guía Modular, Mapa de Relaciones y Experimentos Prácticos — GastroLab
 
 > **Enfoque de este documento:** Análisis **modular archivo por archivo** de los **34 archivos** del proyecto, con analogías sencillas, desglose de componentes/funciones/estados, esquemas visuales de comunicación entre carpetas y ejercicios prácticos para dominar cualquier modificación o pregunta técnica.
-> *(Para estudiar el código línea por línea, consulta la rama comentada en Git creada a partir de `main`).*
+> *(Para estudiar el código línea por línea, consulta la rama `docs/comentarios-linea-por-linea` en Git creada a partir de `main`).*
 
 ---
 
