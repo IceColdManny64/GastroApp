@@ -1,132 +1,132 @@
-import { UpdateCredentialsResponse, UserProfileResponse } from '../types/Auth';
-import { ApiError, apiRequest } from '../utils/api';
-import {
-  getLocalUsers,
-  LocalUserRecord,
-  saveLocalUsers,
-} from '../utils/preferencesStorage';
-import { getToken } from '../utils/tokenStorage';
+import { UpdateCredentialsResponse, UserProfileResponse } from '../types/Auth'; // Interfaces de respuesta de perfil y credenciales
+import { ApiError, apiRequest } from '../utils/api'; // Cliente HTTP para comunicarse con server.js (/api/users)
+import { // Importa helpers de caché local para usuarios
+  getLocalUsers, // Lee respaldo local de cuentas
+  LocalUserRecord, // Estructura { id, email, password }
+  saveLocalUsers, // Guarda respaldo local actualizado
+} from '../utils/preferencesStorage'; // Módulo de almacenamiento de preferencias
+import { getToken } from '../utils/tokenStorage'; // Valida que exista token activo antes de leer perfil
 
-async function loadUsersList(): Promise<LocalUserRecord[]> {
-  try {
-    const serverUsers = await apiRequest<LocalUserRecord[]>('/api/users');
-    if (Array.isArray(serverUsers) && serverUsers.length > 0) {
-      await saveLocalUsers(serverUsers);
-      return serverUsers;
-    }
-  } catch (err) {
-    if (err instanceof ApiError && !err.isNetworkError) {
-      throw err;
-    }
-  }
-  return await getLocalUsers();
-}
+async function loadUsersList(): Promise<LocalUserRecord[]> { // Carga lista de usuarios desde server.js o caché offline
+  try { // Intenta leer desde el microservicio JSON
+    const serverUsers = await apiRequest<LocalUserRecord[]>('/api/users'); // Solicita GET /api/users
+    if (Array.isArray(serverUsers) && serverUsers.length > 0) { // Si trajo usuarios válidos
+      await saveLocalUsers(serverUsers); // Refresca el respaldo local en dispositivo
+      return serverUsers; // Retorna lista fresca de users.json
+    } // Fin de validación de respuesta
+  } catch (err) { // Captura errores de red o HTTP
+    if (err instanceof ApiError && !err.isNetworkError) { // Si fue error real devuelto por servidor
+      throw err; // No oculta fallos HTTP reales
+    } // Fin de verificación error servidor
+  } // Fin de try/catch
+  return await getLocalUsers(); // Respaldo offline cuando el servidor no responde
+} // Fin de loadUsersList
 
-export async function getUserProfile(userId: number): Promise<UserProfileResponse> {
-  const token = await getToken();
-  if (!token) {
-    throw new Error('Sesión no encontrada. Por favor inicia sesión nuevamente.');
-  }
+export async function getUserProfile(userId: number): Promise<UserProfileResponse> { // Obtiene id y correo de un usuario por ID
+  const token = await getToken(); // Verifica sesión iniciada en dispositivo
+  if (!token) { // Si no hay token válido
+    throw new Error('Sesión no encontrada. Por favor inicia sesión nuevamente.'); // Exige reautenticación
+  } // Fin de guardia de token
 
-  try {
-    const user = await apiRequest<LocalUserRecord>(`/api/users/${Number(userId)}`);
-    return { id: user.id, email: user.email };
-  } catch (err) {
-    if (err instanceof ApiError && !err.isNetworkError) {
-      throw new Error(err.message);
-    }
-  }
+  try { // Intenta pedir el usuario específico al servidor JSON
+    const user = await apiRequest<LocalUserRecord>(`/api/users/${Number(userId)}`); // Solicita GET /api/users/:id
+    return { id: user.id, email: user.email }; // Retorna solo datos de perfil sin exponer clave innecesariamente
+  } catch (err) { // Maneja error de red o 404
+    if (err instanceof ApiError && !err.isNetworkError) { // Si el servidor respondió 404 (no existe)
+      throw new Error(err.message); // Lanza mensaje de usuario no encontrado
+    } // Fin de verificación error HTTP
+  } // Fin de try/catch
 
-  const users = await getLocalUsers();
-  const found = users.find((u) => Number(u.id) === Number(userId));
-  if (!found) {
-    throw new Error('Usuario no encontrado.');
-  }
+  const users = await getLocalUsers(); // En modo offline busca en lista local
+  const found = users.find((u) => Number(u.id) === Number(userId)); // Compara por ID numérico
+  if (!found) { // Si tampoco existe localmente
+    throw new Error('Usuario no encontrado.'); // Lanza error descriptivo
+  } // Fin de verificación encontrado
 
-  return {
-    id: found.id,
-    email: found.email,
-  };
-}
+  return { // Retorna perfil desde caché local
+    id: found.id, // ID encontrado
+    email: found.email, // Correo encontrado
+  }; // Fin de objeto perfil
+} // Fin de getUserProfile
 
-export async function verifyPassword(
-  userId: number,
-  currentPassword: string
-): Promise<UpdateCredentialsResponse> {
-  const users = await loadUsersList();
-  const found = users.find((u) => Number(u.id) === Number(userId));
+export async function verifyPassword( // Confirma que la contraseña actual sea correcta antes de modificar cuenta
+  userId: number, // ID del usuario autenticado en Ajustes
+  currentPassword: string // Contraseña actual escrita para confirmar identidad
+): Promise<UpdateCredentialsResponse> { // Devuelve valid: true/false
+  const users = await loadUsersList(); // Lee listado actualizado de usuarios
+  const found = users.find((u) => Number(u.id) === Number(userId)); // Localiza al usuario por ID
 
-  if (!found) {
-    throw new Error('Usuario no encontrado.');
-  }
+  if (!found) { // Si el usuario no existe en registros
+    throw new Error('Usuario no encontrado.'); // Falla explícitamente
+  } // Fin de verificación usuario
 
-  const valid = found.password === currentPassword;
-  return {
-    status: 'success',
-    valid,
-    message: valid ? 'Contraseña válida' : 'Contraseña incorrecta',
-  };
-}
+  const valid = found.password === currentPassword; // Compara estrictamente la contraseña actual guardada
+  return { // Retorna resultado de validación
+    status: 'success', // Operación completada
+    valid, // True si coincidió, false si es errónea
+    message: valid ? 'Contraseña válida' : 'Contraseña incorrecta', // Mensaje claro según resultado
+  }; // Fin de retorno verifyPassword
+} // Fin de verifyPassword
 
-export async function updateCredentials(
-  userId: number,
-  newEmail: string,
-  newPassword: string
-): Promise<UpdateCredentialsResponse> {
-  const cleanEmail = newEmail.trim();
-  const normalizedEmail = cleanEmail.toLowerCase();
-  const numericId = Number(userId);
+export async function updateCredentials( // Actualiza correo electrónico y/o contraseña del usuario
+  userId: number, // ID numérico del usuario a modificar
+  newEmail: string, // Nuevo correo electrónico deseado
+  newPassword: string // Nueva contraseña (o la actual si se conservó igual)
+): Promise<UpdateCredentialsResponse> { // Devuelve confirmación del cambio
+  const cleanEmail = newEmail.trim(); // Limpia espacios del correo nuevo
+  const normalizedEmail = cleanEmail.toLowerCase(); // Normaliza para revisar duplicados offline
+  const numericId = Number(userId); // Asegura ID numérico
 
-  try {
-    const updated = await apiRequest<LocalUserRecord>(`/api/users/${numericId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ email: cleanEmail, password: newPassword }),
-    });
+  try { // Intenta guardar el cambio directo en src/data/users.json vía server.js
+    const updated = await apiRequest<LocalUserRecord>(`/api/users/${numericId}`, { // Petición PUT /api/users/:id
+      method: 'PUT', // Verbo HTTP de actualización
+      body: JSON.stringify({ email: cleanEmail, password: newPassword }), // Envía nuevo correo y contraseña en JSON
+    }); // Espera usuario actualizado devuelto por server.js
 
-    const localUsers = await getLocalUsers();
-    const existsLocally = localUsers.some((u) => Number(u.id) === numericId);
-    const nextUsers = existsLocally
-      ? localUsers.map((u) => (Number(u.id) === numericId ? updated : u))
-      : [...localUsers, updated];
-    await saveLocalUsers(nextUsers);
+    const localUsers = await getLocalUsers(); // Lee respaldo local en dispositivo
+    const existsLocally = localUsers.some((u) => Number(u.id) === numericId); // Verifica si ya estaba en caché
+    const nextUsers = existsLocally // Reemplaza o añade el usuario actualizado en la caché local
+      ? localUsers.map((u) => (Number(u.id) === numericId ? updated : u)) // Actualiza el elemento coincidente
+      : [...localUsers, updated]; // Lo agrega si faltaba en caché
+    await saveLocalUsers(nextUsers); // Persiste respaldo local sincronizado
 
-    return {
-      status: 'success',
-      message: 'Credenciales actualizadas correctamente',
-      affected_rows: 1,
-    };
-  } catch (err) {
-    if (err instanceof ApiError && !err.isNetworkError) {
-      throw new Error(err.message);
-    }
-  }
+    return { // Retorna respuesta de éxito al formulario
+      status: 'success', // Estado exitoso
+      message: 'Credenciales actualizadas correctamente', // Texto amigable en español
+      affected_rows: 1, // Simula 1 registro actualizado
+    }; // Fin de retorno exitoso
+  } catch (err) { // Captura errores del servidor o falta de conexión
+    if (err instanceof ApiError && !err.isNetworkError) { // Si server.js rechazó por correo repetido (409) o usuario inexistente (404)
+      throw new Error(err.message); // Propaga el error real a Ajustes
+    } // Fin de manejo error servidor
+  } // Fin de try/catch
 
-  const users = await getLocalUsers();
-  const userIndex = users.findIndex((u) => Number(u.id) === numericId);
-  if (userIndex === -1) {
-    throw new Error('Usuario no encontrado.');
-  }
+  const users = await getLocalUsers(); // Fallback offline si server.js está apagado
+  const userIndex = users.findIndex((u) => Number(u.id) === numericId); // Busca posición en arreglo local
+  if (userIndex === -1) { // Si no existe el usuario localmente
+    throw new Error('Usuario no encontrado.'); // Lanza error descriptivo
+  } // Fin de verificación índice
 
-  const emailTakenByOther = users.some(
-    (u) => Number(u.id) !== numericId && u.email.toLowerCase() === normalizedEmail
-  );
-  if (emailTakenByOther) {
-    throw new Error('Ese correo electrónico ya está en uso por otra cuenta.');
-  }
+  const emailTakenByOther = users.some( // Revisa si el correo nuevo ya lo usa otra cuenta distinta
+    (u) => Number(u.id) !== numericId && u.email.toLowerCase() === normalizedEmail // Excluye al usuario actual
+  ); // Fin de validación duplicado
+  if (emailTakenByOther) { // Si otra cuenta ya tiene ese correo
+    throw new Error('Ese correo electrónico ya está en uso por otra cuenta.'); // Impide colisión de correos
+  } // Fin de verificación correo ocupado
 
-  users[userIndex] = {
-    ...users[userIndex],
-    email: cleanEmail,
-    password: newPassword,
-  };
-  await saveLocalUsers(users);
+  users[userIndex] = { // Actualiza el registro en memoria local
+    ...users[userIndex], // Conserva ID y propiedades previas
+    email: cleanEmail, // Asigna correo nuevo
+    password: newPassword, // Asigna contraseña nueva
+  }; // Fin de actualización de objeto
+  await saveLocalUsers(users); // Guarda la lista local actualizada
 
-  return {
-    status: 'success',
-    message: 'Credenciales actualizadas correctamente',
-    affected_rows: 1,
-  };
-}
+  return { // Retorna éxito desde respaldo offline
+    status: 'success', // Estado exitoso
+    message: 'Credenciales actualizadas correctamente', // Mensaje de confirmación
+    affected_rows: 1, // 1 fila actualizada
+  }; // Fin de retorno offline
+} // Fin de updateCredentials
 
-export const verifyUserPassword = verifyPassword;
-export const updateUserCredentials = updateCredentials;
+export const verifyUserPassword = verifyPassword; // Alias de compatibilidad de nombre
+export const updateUserCredentials = updateCredentials; // Alias de compatibilidad de nombre
